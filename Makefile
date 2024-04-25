@@ -272,7 +272,7 @@ TARGETS_MY_CODE_V8 := $(shell find . -type f -name 'rtsp_test_v8.cpp' -exec base
 TARGETS_MY_CODE := $(shell find . -type f -name 'rtsp_test.cpp' -exec basename {} .cpp ';')
  
 #TARGETS = $(TARGETS_MY_CODE) $(TARGETS_MY_CODE_V8) $(TARGETS_YOLO_SAMPLE)
-TARGETS = $(TARGETS_MY_CODE_V8)
+TARGETS = $(TARGETS_MY_CODE_V8) $(TARGETS_YOLO_SAMPLE)
 # $(TARGETS_SAMPLE_INIT) \
 #   	      $(TARGETS_VI_SAMPLE) \
 #  	      $(TARGETS_AUDIO_SAMPLE) \

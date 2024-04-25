@@ -44,9 +44,11 @@ void MY_RTSP_ON_DISCONNECT(const char *ip, void *arg) {
 }
 
 
+
 static volatile bool bExit = false;
 
 static cvtdl_object_t g_obj_data = {0};
+static cvtdl_object_t g_obj_data2 = {0};
 static cvtdl_tracker_t g_stTrackerMeta = {0};
 
 typedef struct {
@@ -106,6 +108,7 @@ void *run_venc(void *args) {
   SAMPLE_TDL_VENC_THREAD_ARG_S *pstArgs = (SAMPLE_TDL_VENC_THREAD_ARG_S *)args;
   VIDEO_FRAME_INFO_S stFrame;
   CVI_S32 s32Ret;
+  cvtdl_object_t stObjMeta = {0};
   cvtdl_object_t stObjMeta2 = {0};
   cvtdl_tracker_t stTrackerMeta2 = {0};
 
@@ -120,7 +123,8 @@ void *run_venc(void *args) {
 
     if(pthread_mutex_trylock(&ResultMutex) != EBUSY)
     {
-      CVI_TDL_CopyObjectMeta(&g_obj_data, &stObjMeta2);
+      CVI_TDL_CopyObjectMeta(&g_obj_data, &stObjMeta);
+      CVI_TDL_CopyObjectMeta(&g_obj_data2, &stObjMeta2);
       CVI_TDL_CopyTrackerMeta(&g_stTrackerMeta, &stTrackerMeta2);
       pthread_mutex_unlock(&ResultMutex);
     }
@@ -189,14 +193,11 @@ void *run_tdl_thread(void *pHandle) {
   cvitdl_handle_t tdl_handle = (cvitdl_handle_t)pHandle;
   VIDEO_FRAME_INFO_S fdFrame;
   cvtdl_object_t stObjMeta = {0};
-  // cvtdl_object_t stTrackObjMeta = {0};
-  // cvtdl_object_t stTrackObjMeta2 = {0};
   cvtdl_tracker_t stTrackerMeta = {0};
-
-  CVI_TDL_SetModelThreshold(tdl_handle, CVI_TDL_SUPPORTED_MODEL_YOLOV8_DETECTION, 0.5);
-  CVI_TDL_SetModelNmsThreshold(tdl_handle, CVI_TDL_SUPPORTED_MODEL_YOLOV8_DETECTION, 0.5);
+  cvtdl_object_t stTrackObjMeta = {0};
+  cvtdl_object_t stTrackObjMeta2 = {0};
   int sem;
-  uint32_t i;
+
   while (bExit == false) {
     if(CVI_VPSS_GetChnFrame(0, VPSS_CHN1, &fdFrame, 2000) != CVI_SUCCESS)
     {
@@ -206,6 +207,7 @@ void *run_tdl_thread(void *pHandle) {
     struct timeval yolot0, yolot1;
     struct timeval deepsortt0, deepsortt1;
 
+/*****************************YOLO stage*****************************/    
     gettimeofday(&yolot0, NULL);
     if(CVI_TDL_YOLOV8_Detection(tdl_handle, &fdFrame, &stObjMeta) != CVI_SUCCESS){
       printf("YOLOV8 failed!\n");
@@ -214,48 +216,48 @@ void *run_tdl_thread(void *pHandle) {
       bExit = true;
     }
     gettimeofday(&yolot1, NULL);
-    unsigned long yolo_execution_time = ((yolot1.tv_sec - yolot0.tv_sec) * 1000000 + yolot1.tv_usec - yolot0.tv_usec)/1000;
-
+/*****************************DeepSORT stage*****************************/
     gettimeofday(&deepsortt0, NULL);
+    CVI_TDL_CopyObjectMeta(&stObjMeta, &stTrackObjMeta);
     
-
-    // int j = 0;
-    // int k = 0;
-    // for (i = 0; i < stObjMeta.size; i++){
-    //   if(stObjMeta.info[i].classes == 5) j++;
-    // }
-    // if(j != 0){  
-    //   CVI_TDL_CopyObjectMeta(&stObjMeta,&stTrackObjMeta);
-    //   for (i = 0; i < stObjMeta.size; i++){
-    //     if(stTrackObjMeta.info[i].classes == 5){ 
-    //       My_CopyObjectInfo(&stObjMeta.info[i],&stTrackObjMeta.info[k]);
-    //       k++;
-    //     } 
-    //     stTrackObjMeta.size = k;  
-    //   }
-    //   CVI_TDL_CopyObjectMeta(&stTrackObjMeta,&stTrackObjMeta2);
-
-    //   if (CVI_TDL_DeepSORT_Obj(tdl_handle, &stTrackObjMeta, &stTrackerMeta,false) != CVI_TDL_SUCCESS) {
-    //     printf("DeepSORT failed!\n");
-    //     CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
-    //     CVI_TDL_Free(&stTrackObjMeta);
-    //     CVI_TDL_Free(&stObjMeta);
-    //     CVI_TDL_Free(&stTrackerMeta);
-    //     bExit = true;
-    //   }      
-
-          
-    // }
+    int j = 0;
+    int k = 0;
+    for (uint32_t i = 0; i < stObjMeta.size; i++){
+      if(stObjMeta.info[i].classes == 5) j++;
+    }
+    if(j != 0){  
+      CVI_TDL_CopyObjectMeta(&stObjMeta,&stTrackObjMeta);
+      for (uint32_t i = 0; i < stObjMeta.size; i++){
+        if(stTrackObjMeta.info[i].classes == 5){ 
+          My_CopyObjectInfo(&stObjMeta.info[i],&stTrackObjMeta.info[k]);
+          k++;
+        } 
+        stTrackObjMeta.size = k;  
+      }
+      CVI_TDL_CopyObjectMeta(&stTrackObjMeta, &stTrackObjMeta2);
+    }
+    else CVI_TDL_Free(&stTrackObjMeta2);
     
+    if (CVI_TDL_DeepSORT_Obj(tdl_handle, &stTrackObjMeta2, &stTrackerMeta,false) != CVI_TDL_SUCCESS) {
+      printf("DeepSORT failed!\n");
+      CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
+      CVI_TDL_Free(&stTrackObjMeta);
+      CVI_TDL_Free(&stTrackObjMeta2);
+      CVI_TDL_Free(&stObjMeta);
+      CVI_TDL_Free(&stTrackerMeta);
+      bExit = true;
+    }      
     gettimeofday(&deepsortt1, NULL);
+/***************************** END *****************************/
+    unsigned long yolo_execution_time = ((yolot1.tv_sec - yolot0.tv_sec) * 1000000 + yolot1.tv_usec - yolot0.tv_usec)/1000;
     unsigned long deepsort_execution_time = ((deepsortt1.tv_sec - deepsortt0.tv_sec) * 1000000 + deepsortt1.tv_usec - deepsortt0.tv_usec)/1000;
     printf("obj count: %d, exec time=%lu ms\n",stObjMeta.size, yolo_execution_time);
     printf("obj count: %d, exec time=%lu ms\n",stTrackerMeta.size, deepsort_execution_time);
     if(stObjMeta.size != 0)
     {
       printf("------------------yolo info-------------------\n");
-      for (i = 0; i < stObjMeta.size; i++){
-        // strlcpy(stObjMeta.info[i].name,class_name[stObjMeta.info[i].classes],16);
+      for (uint32_t i = 0; i < stObjMeta.size; i++){
+        strlcpy(stObjMeta.info[i].name,class_name[stObjMeta.info[i].classes],16);
         printf("detect res: %4.1f %4.1f %4.1f %4.1f %2.1f %s\n", stObjMeta.info[i].bbox.x1, stObjMeta.info[i].bbox.y1,
             stObjMeta.info[i].bbox.x2, stObjMeta.info[i].bbox.y2, stObjMeta.info[i].bbox.score,
             class_name[stObjMeta.info[i].classes]);
@@ -265,45 +267,45 @@ void *run_tdl_thread(void *pHandle) {
         sem_post(&NetSemphore);
       }   
     }
-    // if(stTrackObjMeta2.size != 0)
-    // {
-    //   printf("------------------Track obj info-------------------\n");
-    //   for (i = 0; i < stTrackObjMeta2.size; i++){
-    //     strlcpy(stTrackObjMeta2.info[i].name,class_name[stTrackObjMeta2.info[i].classes],16);
-    //     printf("detect res: %4.1f %4.1f %4.1f %4.1f %2.1f %s\n", stTrackObjMeta2.info[i].bbox.x1, stTrackObjMeta2.info[i].bbox.y1,
-    //         stTrackObjMeta2.info[i].bbox.x2, stTrackObjMeta2.info[i].bbox.y2, stTrackObjMeta2.info[i].bbox.score,
-    //         class_name[stTrackObjMeta2.info[i].classes]);
-    //   }
-    // }
-    // if(stTrackerMeta.size != 0)
-    // {
-    //   printf("------------------DeepSORT info-------------------\n");
-    //   for (i = 0; i < stTrackerMeta.size; i++)
-    //   {
-    //     printf("track res: ");
-    //     printf("%4.1f %4.1f %4.1f %1.3f",stTrackerMeta.info[i].bbox.x1 ,stTrackerMeta.info[i].bbox.y1 ,
-    //                                       stTrackerMeta.info[i].bbox.x2 ,stTrackerMeta.info[i].bbox.y2);
-    //     if(stTrackerMeta.info[i].state == CVI_TRACKER_NEW) printf(" NEW ");
-    //     else if(stTrackerMeta.info[i].state == CVI_TRACKER_UNSTABLE) printf(" UNSTABLE ");
-    //     else if(stTrackerMeta.info[i].state == CVI_TRACKER_STABLE) printf(" STABLE ");
-    //     printf(" %ld %d\n",stTrackerMeta.info[i].id,stTrackerMeta.info[i].out_num);
-    //   }
-    // }
+    if(stTrackObjMeta2.size != 0)
+    {
+      printf("------------------Track obj info-------------------\n");
+      for (uint32_t i = 0; i < stTrackObjMeta2.size; i++){
+        strlcpy(stTrackObjMeta2.info[i].name,class_name[stTrackObjMeta2.info[i].classes],16);
+        printf("detect res: %4.1f %4.1f %4.1f %4.1f %2.1f %s\n", stTrackObjMeta2.info[i].bbox.x1, stTrackObjMeta2.info[i].bbox.y1,
+            stTrackObjMeta2.info[i].bbox.x2, stTrackObjMeta2.info[i].bbox.y2, stTrackObjMeta2.info[i].bbox.score,
+            class_name[stTrackObjMeta2.info[i].classes]);
+      }
+    }
+    if(stTrackerMeta.size != 0)
+    {
+      printf("------------------DeepSORT info-------------------\n");
+      for (uint32_t i = 0; i < stTrackerMeta.size; i++)
+      {
+        printf("track res: ");
+        printf("%4.1f %4.1f %4.1f %1.3f",stTrackerMeta.info[i].bbox.x1 ,stTrackerMeta.info[i].bbox.y1 ,
+                                          stTrackerMeta.info[i].bbox.x2 ,stTrackerMeta.info[i].bbox.y2);
+        if(stTrackerMeta.info[i].state == CVI_TRACKER_NEW) printf(" NEW ");
+        else if(stTrackerMeta.info[i].state == CVI_TRACKER_UNSTABLE) printf(" UNSTABLE ");
+        else if(stTrackerMeta.info[i].state == CVI_TRACKER_STABLE) printf(" STABLE ");
+        printf(" %ld %d\n",stTrackerMeta.info[i].id,stTrackerMeta.info[i].out_num);
+      }
+    }
+
     pthread_mutex_lock(&ResultMutex);
     CVI_TDL_CopyObjectMeta(&stObjMeta, &g_obj_data);
-    // CVI_TDL_CopyTrackerMeta(&stTrackerMeta, &g_stTrackerMeta);
+    CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data2);
+    CVI_TDL_CopyTrackerMeta(&stTrackerMeta, &g_stTrackerMeta);
     pthread_mutex_unlock(&ResultMutex);
-    CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);  
-    
+
+    CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
     CVI_TDL_Free(&stObjMeta);
-    // CVI_TDL_Free(&stTrackObjMeta2);
-    // CVI_TDL_Free(&stTrackerMeta);
+    CVI_TDL_Free(&stTrackObjMeta);
+    CVI_TDL_Free(&stTrackObjMeta2);
+    CVI_TDL_Free(&stTrackerMeta);
     printf("------------------ END -------------------\n\n\n");
   }
-  
-  CVI_TDL_Free(&stObjMeta);
-  // CVI_TDL_Free(&stTrackObjMeta2);
-  // CVI_TDL_Free(&stTrackerMeta);
+
   printf("Exit TDL thread\n");
   pthread_exit(NULL);
 }
@@ -457,26 +459,27 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-
-
   printf("---------------------open yolo model-----------------------");
-
   init_param(stTDLHandle);
   int ret2 = (int)CVI_TDL_OpenModel(stTDLHandle, CVI_TDL_SUPPORTED_MODEL_YOLOV8_DETECTION, argv[1]);
   if(ret2 !=CVI_SUCCESS)
   {
-    printf("openmodel failed ret=%X",ret2);
+    printf("openmodel failed ret=%X\n",ret2);
     CVI_TDL_Service_DestroyHandle(stServiceHandle);
     CVI_TDL_DestroyHandle(stTDLHandle);
     SAMPLE_TDL_Destroy_MW(&stMWContext);    
   }
   printf("---------------------setup deepsort-----------------------\n");
-  // CVI_TDL_DeepSORT_Init(stTDLHandle, true);
-  // cvtdl_deepsort_config_t ds_conf;
-  // CVI_TDL_DeepSORT_GetDefaultConfig(&ds_conf);
-  // set_sample_mot_config(&ds_conf);
-  // CVI_TDL_DeepSORT_SetConfig(stTDLHandle, &ds_conf, -1, false);
-  printf("---------------------all finish-----------------------\n");
+  CVI_TDL_DeepSORT_Init(stTDLHandle, true);
+  cvtdl_deepsort_config_t ds_conf;
+  CVI_TDL_DeepSORT_GetDefaultConfig(&ds_conf);
+  set_sample_mot_config(&ds_conf);
+  ret2 = (int)CVI_TDL_DeepSORT_SetConfig(stTDLHandle, &ds_conf, -1, false);
+  if(ret2 !=CVI_SUCCESS){
+    printf("DeepSORT config failed ret=%X\n",ret2);
+  }
+  else printf("DeepSORT config Success\n");
+  printf("---------------------all finish-----------------------\n"); 
 
   pthread_t stVencThread,stTDLThread;
 
@@ -502,7 +505,6 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-
 CVI_S32 init_param(const cvitdl_handle_t tdl_handle) {
   // setup preprocess
   YoloPreParam preprocess_cfg =
@@ -526,11 +528,10 @@ CVI_S32 init_param(const cvitdl_handle_t tdl_handle) {
   // setup yolo algorithm preprocess
   YoloAlgParam yolov8_param =
       CVI_TDL_Get_YOLO_Algparam(tdl_handle, CVI_TDL_SUPPORTED_MODEL_YOLOV8_DETECTION);
-  yolov8_param.cls = 80;
+  yolov8_param.cls = 10;
 
   printf("setup yolov8 algorithm param \n");
-  ret =
-      CVI_TDL_Set_YOLO_Algparam(tdl_handle, CVI_TDL_SUPPORTED_MODEL_YOLOV8_DETECTION, yolov8_param);
+  ret = CVI_TDL_Set_YOLO_Algparam(tdl_handle, CVI_TDL_SUPPORTED_MODEL_YOLOV8_DETECTION, yolov8_param);
   if (ret != CVI_SUCCESS) {
     printf("Can not set yolov8 algorithm parameters %#x\n", ret);
     return ret;
