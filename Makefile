@@ -203,7 +203,7 @@ MD_INC_PATH = $(SDK_ROOT_PATH)/include/cvi_md
 DRAW_RECT_INC_PATH = $(SDK_ROOT_PATH)/include/cvi_draw_rect
 PREPROCESS_INC_PATH = $(SDK_ROOT_PATH)/include/cvi_preprocess
 
-CFLAGS += -std=gnu11 -Wno-pointer-to-int-cast -fsigned-char -Werror=all -Wno-format-truncation -fdiagnostics-color=always -s
+CFLAGS += -std=gnu11 -Wno-pointer-to-int-cast -fsigned-char -Werror=all -Wno-format-truncation -Wno-class-memaccess -Wno-unused-variable -fdiagnostics-color=always -s
 
 SRCS := $(wildcard $(PWD)/*.c)
 CPPS := $(wildcard $(PWD)/*.cpp)
@@ -237,7 +237,8 @@ CFLAGS += -I$(SDK_INC_PATH) \
 		  -I$(MW_INC_PATH)/linux \
           -I$(AISDK_ROOT_PATH)/include/stb \
 		  -I$(SDK_ROOT_PATH)/sample/cvi_yolo \
-		  -I$(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON 
+		  -I$(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON \
+		  -I$(TPU_PATH)/include \
 		  
 ifeq ($(CONFIRM_ENV_VAR), 1)
 $(info ---------------------------------------)
@@ -270,9 +271,11 @@ TARGETS_YOLO_SAMPLE := $(shell find . -type f -name 'sample_yolo*.cpp' -exec bas
 
 TARGETS_MY_CODE_V8 := $(shell find . -type f -name 'rtsp_test_v8.cpp' -exec basename {} .cpp ';')
 TARGETS_MY_CODE := $(shell find . -type f -name 'rtsp_test.cpp' -exec basename {} .cpp ';')
+
+TARGETS_CVI_YOLO := $(shell find . -type f -name 'cvi_yolo.cpp' -exec basename {} .cpp ';')
  
 #TARGETS = $(TARGETS_MY_CODE) $(TARGETS_MY_CODE_V8) $(TARGETS_YOLO_SAMPLE)
-TARGETS = $(TARGETS_MY_CODE_V8) $(TARGETS_YOLO_SAMPLE)
+TARGETS = $(TARGETS_MY_CODE_V8)
 # $(TARGETS_SAMPLE_INIT) \
 #   	      $(TARGETS_VI_SAMPLE) \
 #  	      $(TARGETS_AUDIO_SAMPLE) \
@@ -331,6 +334,9 @@ rtsp_test_v8: $(PWD)/rtsp_test_v8.o \
 			 $(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON/cJSON_Utils.o 
 			 $(SAMPLE_COMMON_FILE)
 	$(CXX) $(CFLAGS) $(SAMPLE_APP_LIBS) -o $@ $^
+
+cvi_yolo: $(PWD)/cvi_yolo.o \
+	$(CXX) $(CFLAGS) -o $@ $^
 
 sample_init: $(PWD)/sample_init.o
 	$(CC) $(LDFLAGS) $(SAMPLE_LIBS) -o $@ $^

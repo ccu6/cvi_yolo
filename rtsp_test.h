@@ -16,7 +16,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include "cviruntime.h"
 #ifdef __cplusplus
 extern "C"
 {
