@@ -237,8 +237,13 @@ void *run_tdl_thread(void *pHandle) {
       CVI_TDL_CopyObjectMeta(&stTrackObjMeta, &stTrackObjMeta2);
     }
     else CVI_TDL_Free(&stTrackObjMeta2);
-    
-    if (CVI_TDL_DeepSORT_Obj(tdl_handle, &stTrackObjMeta2, &stTrackerMeta,false) != CVI_TDL_SUCCESS) {
+    if (CVI_TDL_OSNet(tdl_handle, &fdFrame, &stTrackObjMeta2) != CVI_TDL_SUCCESS) {
+      printf("DeepSORT failed!\n");
+      CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
+      CVI_TDL_Free(&stTrackObjMeta2);
+      bExit = true;
+    }
+    if (CVI_TDL_DeepSORT_Obj(tdl_handle, &stTrackObjMeta2, &stTrackerMeta, true) != CVI_TDL_SUCCESS) {
       printf("DeepSORT failed!\n");
       CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
       CVI_TDL_Free(&stTrackObjMeta);
@@ -258,7 +263,7 @@ void *run_tdl_thread(void *pHandle) {
       printf("------------------yolo info-------------------\n");
       for (uint32_t i = 0; i < stObjMeta.size; i++){
         strlcpy(stObjMeta.info[i].name,class_name[stObjMeta.info[i].classes],16);
-        printf("detect res: %4.1f %4.1f %4.1f %4.1f %2.1f %s\n", stObjMeta.info[i].bbox.x1, stObjMeta.info[i].bbox.y1,
+        printf("detect res: %4.1f %4.1f %4.1f %4.1f %1.3f %s\n", stObjMeta.info[i].bbox.x1, stObjMeta.info[i].bbox.y1,
             stObjMeta.info[i].bbox.x2, stObjMeta.info[i].bbox.y2, stObjMeta.info[i].bbox.score,
             class_name[stObjMeta.info[i].classes]);
       }
@@ -272,7 +277,7 @@ void *run_tdl_thread(void *pHandle) {
       printf("------------------Track obj info-------------------\n");
       for (uint32_t i = 0; i < stTrackObjMeta2.size; i++){
         strlcpy(stTrackObjMeta2.info[i].name,class_name[stTrackObjMeta2.info[i].classes],16);
-        printf("detect res: %4.1f %4.1f %4.1f %4.1f %2.1f %s\n", stTrackObjMeta2.info[i].bbox.x1, stTrackObjMeta2.info[i].bbox.y1,
+        printf("detect res: %4.1f %4.1f %4.1f %4.1f %1.3f %s\n", stTrackObjMeta2.info[i].bbox.x1, stTrackObjMeta2.info[i].bbox.y1,
             stTrackObjMeta2.info[i].bbox.x2, stTrackObjMeta2.info[i].bbox.y2, stTrackObjMeta2.info[i].bbox.score,
             class_name[stTrackObjMeta2.info[i].classes]);
       }
@@ -320,12 +325,11 @@ static void SampleHandleSig(CVI_S32 signo) {
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
+  if (argc != 3) {
     printf(
-        "\nUsage: %s RETINA_MODEL_PATH QUALITY_MODEL_PATH INPUT_FORMAT\n\n"
-        "\tRETINA_MODEL_PATH, path to retinaface model.\n"
-        "\tQUALITY_MODEL_PATH, path to face quality model.\n"
-        "\tINPUT_FORMAT, input format of face quality model. 0: RGB888, 1: NV21, 2: YUV420.\n",
+        "\nUsage: %s YOLOV8_PATH OSNET_PATH\n\n"
+        "\tYOLOV8_PATH\n"
+        "\tOSNET_PATH\n",
         argv[0]);
     return CVI_TDL_FAILURE;
   }
@@ -470,6 +474,14 @@ int main(int argc, char *argv[]) {
     SAMPLE_TDL_Destroy_MW(&stMWContext);    
   }
   printf("---------------------setup deepsort-----------------------\n");
+  ret2 = (int)CVI_TDL_OpenModel(stTDLHandle, CVI_TDL_SUPPORTED_MODEL_OSNET, argv[2]);
+  if(ret2 !=CVI_SUCCESS)
+  {
+    printf("openmodel failed ret=%X\n",ret2);
+    CVI_TDL_Service_DestroyHandle(stServiceHandle);
+    CVI_TDL_DestroyHandle(stTDLHandle);
+    SAMPLE_TDL_Destroy_MW(&stMWContext);    
+  }
   CVI_TDL_DeepSORT_Init(stTDLHandle, true);
   cvtdl_deepsort_config_t ds_conf;
   CVI_TDL_DeepSORT_GetDefaultConfig(&ds_conf);
