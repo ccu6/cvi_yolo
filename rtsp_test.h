@@ -27,9 +27,11 @@ extern "C"
 }
 #endif
 
+
 void *network_thread(void *ip);
 CVI_S32 init_param(const cvitdl_handle_t tdl_handle);
 void set_sample_mot_config(cvtdl_deepsort_config_t *ds_conf);
 float* utilis_get_mid(cvtdl_object_info_t x);
 cvtdl_service_brush_t get_random_brush(uint64_t seed, int min) ;
 void My_CopyObjectInfo(cvtdl_object_info_t *src,cvtdl_object_info_t *dst);
+bool utilis_is_in(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);

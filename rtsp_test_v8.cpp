@@ -50,6 +50,9 @@ static volatile bool bExit = false;
 static cvtdl_object_t g_obj_data = {0};
 static cvtdl_object_t g_obj_data2 = {0};
 static cvtdl_tracker_t g_stTrackerMeta = {0};
+static uint32_t g_Personcount = 0;
+static uint8_t g_PersonTimeOut[256] = {0};
+static uint8_t g_PersonState[256] = {0};
 
 typedef struct {
   SAMPLE_TDL_MW_CONTEXT *pstMWContext;
@@ -112,7 +115,49 @@ void *run_venc(void *args) {
   cvtdl_object_t stObjMeta2 = {0};
   cvtdl_tracker_t stTrackerMeta2 = {0};
 
-  
+  // uint32_t s_Personcount = 0;
+  uint8_t s_PersonTimeOut[256] = {0};
+  uint8_t s_PersonState[256] = {0};
+  cvtdl_service_brush_t brush_green = {
+    .color={
+        .r = 0,
+        .g = 255,
+        .b = 0,
+    },
+    .size = 4
+  };
+  cvtdl_service_brush_t brush_blue = {
+    .color={
+        .r = 0,
+        .g = 0,
+        .b = 255,
+    },
+    .size = 4
+  };
+  cvtdl_service_brush_t brush_red = {
+    .color={
+        .r = 255,
+        .g = 0,
+        .b = 0,
+    },
+    .size = 4
+  };
+  cvtdl_service_brush_t brush_yellow = {
+    .color={
+        .r = 255,
+        .g = 255,
+        .b = 0,
+    },
+    .size = 4
+  };
+  cvtdl_service_brush_t brush_pink = {
+    .color={
+        .r = 255,
+        .g = 0,
+        .b = 255,
+    },
+    .size = 4
+  };
 
   while (bExit == false) {
     s32Ret = CVI_VPSS_GetChnFrame(0, VPSS_CHN0, &stFrame, 2000);
@@ -127,45 +172,41 @@ void *run_venc(void *args) {
       CVI_TDL_CopyObjectMeta(&g_obj_data2, &stObjMeta2);
       CVI_TDL_CopyTrackerMeta(&g_stTrackerMeta, &stTrackerMeta2);
       pthread_mutex_unlock(&ResultMutex);
+      memcpy(s_PersonState,g_PersonState,256);
+      // s_Personcount = g_Personcount;
     }
-    cvtdl_service_brush_t brushi1;
-    brushi1.color.r = 0;
-    brushi1.color.g = 255;
-    brushi1.color.b = 0;
-    brushi1.size = 4;
-    // cvtdl_service_brush_t brushi2;
-    // brushi2.color.r = 255;
-    // brushi2.color.g = 0;
-    // brushi2.color.b = 0;
-    // brushi2.size = 4;
-    cvtdl_service_brush_t brushi3;
-    brushi3.color.r = 105; 
-    brushi3.color.g = 105;
-    brushi3.color.b = 105;
-    brushi3.size = 4;
-
+    
     // s32Ret = CVI_TDL_Service_ObjectDrawRect(pstArgs->stServiceHandle, &stObjMeta2, &stFrame, true,
     //                                       brushi2);
 
     cvtdl_service_brush_t *brushes = (cvtdl_service_brush_t *)malloc(stObjMeta2.size * sizeof(cvtdl_service_brush_t));
     for (uint32_t oid = 0; oid < stObjMeta2.size; oid++) {
-    if (stTrackerMeta2.info[oid].state == CVI_TRACKER_NEW) {
-        brushes[oid] = brushi1;
-      } else if (stTrackerMeta2.info[oid].state == CVI_TRACKER_UNSTABLE) {
-        brushes[oid] = brushi3;
-      } else {  // CVI_TRACKER_STABLE
-        brushes[oid] = get_random_brush(stObjMeta2.info[oid].unique_id, 64);
+      if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00001101) == 0b00001101) { 
+        brushes[oid] = brush_red;
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "No Vest and Safe Hat");
+      }      
+      else if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00001001) == 0b00001001) {
+        brushes[oid] = brush_yellow;
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "No Vest");
+      }    
+      else if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00000101) == 0b00000101) {
+        brushes[oid] = brush_pink;
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "No Safe Hat");
       }
-    }
-    for (uint32_t oid = 0; oid < stObjMeta2.size; oid++) {
-    snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "UID: %" PRIu64 "",
-            stObjMeta2.info[oid].unique_id);
+      else if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00000001) == 0b00000001) {
+        brushes[oid] = brush_green;
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "Safe");
+      }
+      else{
+        brushes[oid] = brush_blue;
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "New");
+      }
     }
 
     s32Ret = CVI_TDL_Service_ObjectDrawRect2(pstArgs->stServiceHandle, &stObjMeta2, &stFrame, true, brushes);
     if (s32Ret != CVI_TDL_SUCCESS) {
       CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
-      printf("Draw fame fail!, ret=%x\n", s32Ret);
+      printf("Draw frame fail!, ret=%x\n", s32Ret);
       bExit = true;
       free(brushes);
     }
@@ -196,6 +237,9 @@ void *run_tdl_thread(void *pHandle) {
   cvtdl_tracker_t stTrackerMeta = {0};
   cvtdl_object_t stTrackObjMeta = {0};
   cvtdl_object_t stTrackObjMeta2 = {0};
+  uint32_t s_Personcount = 0;
+  uint8_t s_PersonTimeOut[256] = {0};
+  uint8_t s_PersonState[256] = {0};
   int sem;
 
   while (bExit == false) {
@@ -296,13 +340,91 @@ void *run_tdl_thread(void *pHandle) {
         printf(" %ld %d\n",stTrackerMeta.info[i].id,stTrackerMeta.info[i].out_num);
       }
     }
+    if(stTrackerMeta.size != 0)
+    {
+      printf("------------------Person Count %4d-------------------\n",s_Personcount);
+      for (uint32_t i = 0; i < stTrackerMeta.size; i++){
+        stTrackObjMeta2.info[i].unique_id = stTrackerMeta.info[i].id;
+        if (stTrackerMeta.info[i].state == CVI_TRACKER_STABLE){
+          if(s_PersonState[stTrackerMeta.info[i].id] == 0x00){
+            s_PersonState[stTrackerMeta.info[i].id] |= 0b00000001;
+            s_PersonTimeOut[stTrackerMeta.info[i].id] = 100;
+            s_Personcount++;
+          }
+          else{
+            s_PersonTimeOut[stTrackerMeta.info[i].id] = 100;
+          }
+          s_PersonState[stTrackerMeta.info[i].id] |= 0b00000100;
+          for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
+            if(stObjMeta.info[ii].classes == 0){
+              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                s_PersonState[stTrackerMeta.info->id] &= ~0b00000100;
+              }
+            }
+            else if(stObjMeta.info[ii].classes == 2){
+              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                break;
+              }
+            }
+          }
+          s_PersonState[stTrackerMeta.info[i].id] |= 0b00001000;
+          for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
+            if(stObjMeta.info[ii].classes == 7){
+              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                s_PersonState[stTrackerMeta.info[i].id] &= ~0b00001000;
+              }
+            }
+            else if(stObjMeta.info[ii].classes == 4){
+              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                break;
+              }
+            }
+          }
+        } 
+      }
+      for (uint32_t i = 0; i < 256; i++){
+        if(s_PersonState[i] != 0x00){
+          s_PersonTimeOut[i]--;
+          printf("ID:%3d Remain %3dTicks ",i,s_PersonTimeOut[i]);
+          if(s_PersonState[i] & 0b00000100) printf("No Safe Hat  ");
+          if(s_PersonState[i] & 0b00001000) printf("No Vest  ");
+          if(!(s_PersonState[i] & 0b00001100)) printf("SAFE");
+          printf("\n");
+        }
+        if(s_PersonTimeOut[i] == 0x00){
+          s_PersonState[i] = 0x00;
+        }
+      }
+    }
+    /*
+    bit 0 ID是否有效
+    bit 1 ID是否拍照
+    bit 2 ID是否佩戴头盔
+    bit 3 ID是否穿戴反光衣
+    bit 4 
+    */
+
+   /*
+  0: Hardhat
+  1: Mask
+  2: NO-Hardhat
+  3: NO-Mask
+  4: NO-Safety Vest 
+  5: Person
+  6: Safety Cone
+  7: Safety Vest
+  8: machinery 
+  9: vehicle
+*/
+
 
     pthread_mutex_lock(&ResultMutex);
     CVI_TDL_CopyObjectMeta(&stObjMeta, &g_obj_data);
     CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data2);
     CVI_TDL_CopyTrackerMeta(&stTrackerMeta, &g_stTrackerMeta);
     pthread_mutex_unlock(&ResultMutex);
-
+    memcpy(g_PersonState,s_PersonState,256);
+    g_Personcount = s_Personcount;
     CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
     CVI_TDL_Free(&stObjMeta);
     CVI_TDL_Free(&stTrackObjMeta);
@@ -562,6 +684,16 @@ float* utilis_get_mid(cvtdl_object_info_t x)
   out[0] = (x.bbox.x1 + x.bbox.x2) / 2;
   out[1] = (x.bbox.y1 + x.bbox.y2) / 2;
   return out;
+}
+
+bool utilis_is_in(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj)
+{
+  float mid_x = (tar.bbox.x1 + tar.bbox.x2)/2;
+  float mid_y = (tar.bbox.y1 + tar.bbox.y2)/2;
+  if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2))
+    return true;
+  else
+    return false;
 }
 
 // float* utilis_is_same_object(cvtdl_object_info_t n,cvtdl_object_info_t p1,cvtdl_object_info_t p2,uint16_t error)
