@@ -35,3 +35,5 @@ float* utilis_get_mid(cvtdl_object_info_t x);
 cvtdl_service_brush_t get_random_brush(uint64_t seed, int min) ;
 void My_CopyObjectInfo(cvtdl_object_info_t *src,cvtdl_object_info_t *dst);
 bool utilis_is_in(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
+bool utilis_wear_safe_hat(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
+bool utilis_wear_safe_vest(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);

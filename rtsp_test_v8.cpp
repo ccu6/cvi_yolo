@@ -346,37 +346,41 @@ void *run_tdl_thread(void *pHandle) {
       for (uint32_t i = 0; i < stTrackerMeta.size; i++){
         stTrackObjMeta2.info[i].unique_id = stTrackerMeta.info[i].id;
         if (stTrackerMeta.info[i].state == CVI_TRACKER_STABLE){
-          if(s_PersonState[stTrackerMeta.info[i].id] == 0x00){
-            s_PersonState[stTrackerMeta.info[i].id] |= 0b00000001;
+          if(s_PersonState[stTrackerMeta.info[i].id] == 0b00010000 && s_PersonTimeOut[stTrackerMeta.info[i].id] == 0x00){
+            s_PersonState[stTrackerMeta.info[i].id] = 0b00000001;
             s_PersonTimeOut[stTrackerMeta.info[i].id] = 100;
             s_Personcount++;
           }
-          else{
+          else if(s_PersonState[stTrackerMeta.info[i].id] == 0b00000000){
+            s_PersonState[stTrackerMeta.info[i].id] = 0b00010000;
+            s_PersonTimeOut[stTrackerMeta.info[i].id] = 10;
+          }        
+          if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000001) == 0b00000001){
             s_PersonTimeOut[stTrackerMeta.info[i].id] = 100;
-          }
-          s_PersonState[stTrackerMeta.info[i].id] |= 0b00000100;
-          for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
-            if(stObjMeta.info[ii].classes == 0){
-              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                s_PersonState[stTrackerMeta.info->id] &= ~0b00000100;
+            s_PersonState[stTrackerMeta.info[i].id] |= 0b00000100;
+            for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
+              if(stObjMeta.info[ii].classes == 0){
+                if(utilis_wear_safe_hat(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                  s_PersonState[stTrackerMeta.info->id] &= ~0b00000100;
+                }
+              }
+              else if(stObjMeta.info[ii].classes == 2){
+                if(utilis_wear_safe_hat(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                  break;
+                }
               }
             }
-            else if(stObjMeta.info[ii].classes == 2){
-              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                break;
+            s_PersonState[stTrackerMeta.info[i].id] |= 0b00001000;
+            for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
+              if(stObjMeta.info[ii].classes == 7){
+                if(utilis_wear_safe_vest(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                  s_PersonState[stTrackerMeta.info[i].id] &= ~0b00001000;
+                }
               }
-            }
-          }
-          s_PersonState[stTrackerMeta.info[i].id] |= 0b00001000;
-          for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
-            if(stObjMeta.info[ii].classes == 7){
-              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                s_PersonState[stTrackerMeta.info[i].id] &= ~0b00001000;
-              }
-            }
-            else if(stObjMeta.info[ii].classes == 4){
-              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                break;
+              else if(stObjMeta.info[ii].classes == 4){
+                if(utilis_wear_safe_vest(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                  break;
+                }
               }
             }
           }
@@ -384,15 +388,19 @@ void *run_tdl_thread(void *pHandle) {
       }
       for (uint32_t i = 0; i < 256; i++){
         if(s_PersonState[i] != 0x00){
-          s_PersonTimeOut[i]--;
           printf("ID:%3d Remain %3dTicks ",i,s_PersonTimeOut[i]);
           if(s_PersonState[i] & 0b00000100) printf("No Safe Hat  ");
           if(s_PersonState[i] & 0b00001000) printf("No Vest  ");
-          if(!(s_PersonState[i] & 0b00001100)) printf("SAFE");
+          if(s_PersonState[i] & 0b00010000) printf("New");
+          else if(!(s_PersonState[i] & 0b00001100)) printf("SAFE");
+          
           printf("\n");
         }
         if(s_PersonTimeOut[i] == 0x00){
           s_PersonState[i] = 0x00;
+        }
+        else{
+          s_PersonTimeOut[i]--;
         }
       }
     }
@@ -686,12 +694,32 @@ float* utilis_get_mid(cvtdl_object_info_t x)
   return out;
 }
 
-bool utilis_is_in(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj)
+bool utilis_wear_safe_hat(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj)
 {
   float mid_x = (tar.bbox.x1 + tar.bbox.x2)/2;
   float mid_y = (tar.bbox.y1 + tar.bbox.y2)/2;
-  if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2))
-    return true;
+  float mid_obj_x = (obj.bbox.x1 + obj.bbox.x2)/2;
+  float mid_obj_y = (obj.bbox.y1 + obj.bbox.y2)/2;
+  float len_x = obj.bbox.x2 - obj.bbox.x1;
+  if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2)){
+    if((mid_x >= (mid_obj_x - (len_x * 0.2)))&&(mid_x <= (mid_obj_x + (len_x * 0.2))))
+      return true;
+    else
+      return false;
+  }
+  else
+    return false;
+}
+bool utilis_wear_safe_vest(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj)
+{
+  float mid_x = (tar.bbox.x1 + tar.bbox.x2)/2;
+  float mid_y = (tar.bbox.y1 + tar.bbox.y2)/2;
+  if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2)){
+    if((tar.bbox.y2 >= obj.bbox.y2*0.8)&&(tar.bbox.y2 <= obj.bbox.y2*1.2))
+      return true;
+    else
+      return false;
+  }
   else
     return false;
 }
