@@ -91,17 +91,20 @@ void *network_thread(void *ip){
     
     for(i = 0 ; i < stObjMeta3.size; i++)
     {
-      cJSON_AddItemToObject(DetJson,"Calsses",cJSON_CreateNumber(stObjMeta3.info[i].classes));
-      snprintf(UDPPacket,1023,"http://%s:8000/%s.png",g_ip_addr,stObjMeta3.info[i].name);
-      cJSON_AddItemToObject(DetJson,"Image",cJSON_CreateString(UDPPacket));
-      cJSON_AddItemToObject(DetJson,"x1",cJSON_CreateNumber(stObjMeta3.info[i].bbox.x1));
-      cJSON_AddItemToObject(DetJson,"y1",cJSON_CreateNumber(stObjMeta3.info[i].bbox.y1));
-      cJSON_AddItemToObject(DetJson,"x2",cJSON_CreateNumber(stObjMeta3.info[i].bbox.x2));
-      cJSON_AddItemToObject(DetJson,"y2",cJSON_CreateNumber(stObjMeta3.info[i].bbox.y2));
+      if(stObjMeta3.info[i].classes > 11){
+        cJSON_AddItemToObject(DetJson,"Person_count",cJSON_CreateNumber(g_Personcount));
+        cJSON_AddItemToObject(DetJson,"Calsses",cJSON_CreateNumber(stObjMeta3.info[i].classes - 10));
+        snprintf(UDPPacket,1023,"http://%s:8000/%s.png",g_ip_addr,stObjMeta3.info[i].name);
+        cJSON_AddItemToObject(DetJson,"Image",cJSON_CreateString(UDPPacket));
+        cJSON_AddItemToObject(DetJson,"x1",cJSON_CreateNumber(stObjMeta3.info[i].bbox.x1));
+        cJSON_AddItemToObject(DetJson,"y1",cJSON_CreateNumber(stObjMeta3.info[i].bbox.y1));
+        cJSON_AddItemToObject(DetJson,"x2",cJSON_CreateNumber(stObjMeta3.info[i].bbox.x2));
+        cJSON_AddItemToObject(DetJson,"y2",cJSON_CreateNumber(stObjMeta3.info[i].bbox.y2));
+        ptr = cJSON_Print(DetJson);
+        sendto(sockfd, ptr, strlen(ptr), 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
+        free(ptr);
+      }
     }
-    ptr = cJSON_Print(DetJson);
-    // printf("UDP_Send :\n %s",ptr);
-    sendto(sockfd, ptr, strlen(ptr), 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
     cJSON_Delete(DetJson);
   }
   close(sockfd);
@@ -243,7 +246,7 @@ void *run_tdl_thread(void *pHandle) {
   uint8_t s_PersonState[256] = {0};
   cvtdl_image_t crop_image;
   int sem;
- 
+  bool update = false;
 
   while (bExit == false) {
     if(CVI_VPSS_GetChnFrame(0, VPSS_CHN1, &fdFrame, 2000) != CVI_SUCCESS)
@@ -384,12 +387,13 @@ void *run_tdl_thread(void *pHandle) {
               }
             }
             if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000010) != 0b00000010){
+              update = true;
               if(file_count>=100)system("find ./image -type f -printf '%T+ %p\n' | sort | head -n 1 | cut -d' ' -f2 | xargs rm");
               if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001100) == 0b00001100){
                 timeval timenow;
                 gettimeofday(&timenow,NULL);
                 char path[128] = {0};
-                stTrackObjMeta2.info[i].classes = 4;
+                stTrackObjMeta2.info[i].classes = 14;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST_AND_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
                 snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
                 CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
@@ -397,13 +401,14 @@ void *run_tdl_thread(void *pHandle) {
                   printf("Dump image failed!\n");
                 }
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                file_count++;
                 CVI_TDL_FreeImage(&crop_image);
               }
               else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000100) == 0b00000100){
                 timeval timenow;
                 char path[128] = {0};
                 gettimeofday(&timenow,NULL);
-                stTrackObjMeta2.info[i].classes = 2;
+                stTrackObjMeta2.info[i].classes = 12;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
                 snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
                 CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
@@ -411,13 +416,14 @@ void *run_tdl_thread(void *pHandle) {
                   printf("Dump image failed!\n");
                 }
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                file_count++;
                 CVI_TDL_FreeImage(&crop_image);
               }
               else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001000) == 0b00001000){
                 timeval timenow;
                 char path[128] = {0};
                 gettimeofday(&timenow,NULL);
-                stTrackObjMeta2.info[i].classes = 3;
+                stTrackObjMeta2.info[i].classes = 13;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
                 snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
                 CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
@@ -425,22 +431,28 @@ void *run_tdl_thread(void *pHandle) {
                   printf("Dump image failed!\n");
                 }
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                file_count++;
                 CVI_TDL_FreeImage(&crop_image);
               }
               else{
                 snprintf(stTrackObjMeta2.info[i].name,127,"SAFE");
-                stTrackObjMeta2.info[i].classes = 1;
+                s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                stTrackObjMeta2.info[i].classes = 11;
               }           
-              pthread_mutex_lock(&ResultMutex);
-              CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data3);
-              pthread_mutex_unlock(&ResultMutex);
-              sem_getvalue(&NetSemphore,&sem);
-              if(sem == 0){
-                sem_post(&NetSemphore);
-              }  
             }
           }
         } 
+      }
+      if(update == true){
+        update = false;
+        pthread_mutex_lock(&ResultMutex);
+        g_Personcount = s_Personcount;
+        CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data3);
+        pthread_mutex_unlock(&ResultMutex);
+        sem_getvalue(&NetSemphore,&sem);
+        if(sem == 0){
+          sem_post(&NetSemphore);
+        }  
       }
       for (uint32_t i = 0; i < 256; i++){
         if(s_PersonState[i] != 0x00){
@@ -486,9 +498,10 @@ void *run_tdl_thread(void *pHandle) {
     CVI_TDL_CopyObjectMeta(&stObjMeta, &g_obj_data);
     CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data2);
     CVI_TDL_CopyTrackerMeta(&stTrackerMeta, &g_stTrackerMeta);
+    g_Personcount = s_Personcount;
     pthread_mutex_unlock(&ResultMutex);
     memcpy(g_PersonState,s_PersonState,256);
-    g_Personcount = s_Personcount;
+    
     CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
     CVI_TDL_Free(&stObjMeta);
     CVI_TDL_Free(&stTrackObjMeta);

@@ -12,7 +12,6 @@
 
 #include "stb_image.h"
 #include "stb_image_write.h"
-#include <queue>
 // #include <mongoose/mongoose.h>
 
 // #include <opencv2/opencv.hpp>
@@ -53,6 +52,7 @@ static volatile bool bExit = false;
 
 static cvtdl_object_t g_obj_data = {0};
 static cvtdl_object_t g_obj_data2 = {0};
+static cvtdl_object_t g_obj_data3 = {0};
 static cvtdl_tracker_t g_stTrackerMeta = {0};
 static uint32_t g_Personcount = 0;
 static uint8_t g_PersonTimeOut[256] = {0};
@@ -60,31 +60,12 @@ static uint8_t g_PersonState[256] = {0};
 static uint32_t g_ip_uint32 = 0;
 char* g_ip_addr = NULL;
 const char* dump_path = "/root/image/";
-
+long int file_count = 0;
 typedef struct {
   SAMPLE_TDL_MW_CONTEXT *pstMWContext;
   cvitdl_service_handle_t stServiceHandle;
 } SAMPLE_TDL_VENC_THREAD_ARG_S;
 
-typedef struct {
-  cvtdl_image_t *image;
-  char *path;
-} IMAGE_SAVE_ARG;
-
-
-
-
-void *img_write(void *image_args){
-  IMAGE_SAVE_ARG *image_save_args = (IMAGE_SAVE_ARG *) image_args;
-  printf("saving image to %s\n",image_save_args->path);
-
-  if(stbi_write_png(image_save_args->path,image_save_args->image->width,image_save_args->image->height,
-                    STBI_rgb,image_save_args->image->pix[0],image_save_args->image->stride[0])){
-    printf("Dump image failed!\n");
-  }
-  CVI_TDL_FreeImage(image_save_args->image);
-  return 0;
-}
 
 void *network_thread(void *ip){
   int sockfd;
@@ -100,31 +81,30 @@ void *network_thread(void *ip){
   servaddr.sin_family = AF_INET;
   servaddr.sin_port = htons(11451); 
   servaddr.sin_addr.s_addr = inet_addr((char *) ip); 
-
   while (true)
   {
     sem_wait(&NetSemphore);
     pthread_mutex_lock(&ResultMutex);
-    CVI_TDL_CopyObjectMeta(&g_obj_data, &stObjMeta3);
+    CVI_TDL_CopyObjectMeta(&g_obj_data3, &stObjMeta3);
     pthread_mutex_unlock(&ResultMutex);
     cJSON* DetJson = cJSON_CreateObject();
+    cJSON* DetJson2 = cJSON_CreateObject();
+    // cJSON_AddItemToObject(DetJson2,"Person_count",cJSON_CreateNumber(g_Personcount));
     for(i = 0 ; i < stObjMeta3.size; i++)
     {
-      cJSON *Object = cJSON_CreateArray();
-      cJSON_AddItemToArray(Object,cJSON_CreateNumber(stObjMeta3.info[i].classes/1.0));
-      cJSON_AddItemToArray(Object,cJSON_CreateString(class_name[stObjMeta3.info[i].classes]));
-      cJSON_AddItemToArray(Object,cJSON_CreateNumber(stObjMeta3.info[i].bbox.score));
-      cJSON_AddItemToArray(Object,cJSON_CreateNumber(stObjMeta3.info[i].bbox.x1));
-      cJSON_AddItemToArray(Object,cJSON_CreateNumber(stObjMeta3.info[i].bbox.y1));
-      cJSON_AddItemToArray(Object,cJSON_CreateNumber(stObjMeta3.info[i].bbox.x2));
-      cJSON_AddItemToArray(Object,cJSON_CreateNumber(stObjMeta3.info[i].bbox.y2));
-      sprintf(UDPPacket,"Obj.%02d_%02d_%s",
-                i,stObjMeta3.info[i].classes,class_name[stObjMeta3.info[i].classes]);
-      cJSON_AddItemToObject(DetJson,UDPPacket,Object);
+      cJSON_AddItemToObject(DetJson,"Calsses",cJSON_CreateNumber(stObjMeta3.info[i].classes));
+      snprintf(UDPPacket,1023,"http://%s:8000/%s.png",g_ip_addr,stObjMeta3.info[i].name);
+      cJSON_AddItemToObject(DetJson,"Image",cJSON_CreateString(UDPPacket));
+      cJSON_AddItemToObject(DetJson,"x1",cJSON_CreateNumber(stObjMeta3.info[i].bbox.x1));
+      cJSON_AddItemToObject(DetJson,"y1",cJSON_CreateNumber(stObjMeta3.info[i].bbox.y1));
+      cJSON_AddItemToObject(DetJson,"x2",cJSON_CreateNumber(stObjMeta3.info[i].bbox.x2));
+      cJSON_AddItemToObject(DetJson,"y2",cJSON_CreateNumber(stObjMeta3.info[i].bbox.y2));
+      cJSON_AddItemToArray(DetJson2,DetJson);
     }
-    ptr = cJSON_Print(DetJson);
+    ptr = cJSON_Print(DetJson2);
     // printf("UDP_Send :\n %s",ptr);
     sendto(sockfd, ptr, strlen(ptr), 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
+    cJSON_Delete(DetJson2);
     cJSON_Delete(DetJson);
   }
   close(sockfd);
@@ -137,7 +117,6 @@ void *run_venc(void *args) {
   SAMPLE_TDL_VENC_THREAD_ARG_S *pstArgs = (SAMPLE_TDL_VENC_THREAD_ARG_S *)args;
   VIDEO_FRAME_INFO_S stFrame;
   CVI_S32 s32Ret;
-  cvtdl_object_t stObjMeta = {0};
   cvtdl_object_t stObjMeta2 = {0};
   cvtdl_tracker_t stTrackerMeta2 = {0};
 
@@ -194,7 +173,6 @@ void *run_venc(void *args) {
 
     if(pthread_mutex_trylock(&ResultMutex) != EBUSY)
     {
-      CVI_TDL_CopyObjectMeta(&g_obj_data, &stObjMeta);
       CVI_TDL_CopyObjectMeta(&g_obj_data2, &stObjMeta2);
       CVI_TDL_CopyTrackerMeta(&g_stTrackerMeta, &stTrackerMeta2);
       pthread_mutex_unlock(&ResultMutex);
@@ -268,6 +246,7 @@ void *run_tdl_thread(void *pHandle) {
   uint8_t s_PersonState[256] = {0};
   cvtdl_image_t crop_image;
   int sem;
+  bool update = false;
 
   while (bExit == false) {
     if(CVI_VPSS_GetChnFrame(0, VPSS_CHN1, &fdFrame, 2000) != CVI_SUCCESS)
@@ -338,10 +317,6 @@ void *run_tdl_thread(void *pHandle) {
             stObjMeta.info[i].bbox.x2, stObjMeta.info[i].bbox.y2, stObjMeta.info[i].bbox.score,
             class_name[stObjMeta.info[i].classes]);
       }
-      sem_getvalue(&NetSemphore,&sem);
-      if(sem == 0){
-        sem_post(&NetSemphore);
-      }   
     }
     if(stTrackObjMeta2.size != 0)
     {
@@ -381,6 +356,7 @@ void *run_tdl_thread(void *pHandle) {
           else if(s_PersonState[stTrackerMeta.info[i].id] == 0b00000000){
             s_PersonState[stTrackerMeta.info[i].id] = 0b00010000;
             s_PersonTimeOut[stTrackerMeta.info[i].id] = 10;
+            stTrackObjMeta2.info[i].classes = 0;
           }        
           if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000001) == 0b00000001){
             s_PersonTimeOut[stTrackerMeta.info[i].id] = 100;
@@ -411,63 +387,72 @@ void *run_tdl_thread(void *pHandle) {
               }
             }
             if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000010) != 0b00000010){
+              update = true;
+              if(file_count>=100)system("find ./image -type f -printf '%T+ %p\n' | sort | head -n 1 | cut -d' ' -f2 | xargs rm");
               if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001100) == 0b00001100){
                 timeval timenow;
-                pthread_t image_saver;
-                cvtdl_image_t crop_img;
                 gettimeofday(&timenow,NULL);
                 char path[128] = {0};
+                stTrackObjMeta2.info[i].classes = 4;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST_AND_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
                 snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
                 CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
-                CVI_TDL_CopyImage(&crop_image,&crop_img);
-                IMAGE_SAVE_ARG saver_args = {
-                  .image = &crop_img,
-                  .path = path,
-                };
-                pthread_create(&image_saver,NULL,img_write,&saver_args);
+                if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
+                  printf("Dump image failed!\n");
+                }
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                file_count++;
                 CVI_TDL_FreeImage(&crop_image);
               }
               else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000100) == 0b00000100){
                 timeval timenow;
-                pthread_t image_saver;
-                cvtdl_image_t crop_img;
-                gettimeofday(&timenow,NULL);
                 char path[128] = {0};
+                gettimeofday(&timenow,NULL);
+                stTrackObjMeta2.info[i].classes = 2;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
                 snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
                 CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
-                CVI_TDL_CopyImage(&crop_image,&crop_img);
-                IMAGE_SAVE_ARG saver_args = {
-                  .image = &crop_img,
-                  .path = path,
-                };
-                pthread_create(&image_saver,NULL,img_write,&saver_args);
+                if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
+                  printf("Dump image failed!\n");
+                }
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                file_count++;
                 CVI_TDL_FreeImage(&crop_image);
               }
               else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001000) == 0b00001000){
                 timeval timenow;
-                pthread_t image_saver;
-                cvtdl_image_t crop_img;
-                gettimeofday(&timenow,NULL);
                 char path[128] = {0};
+                gettimeofday(&timenow,NULL);
+                stTrackObjMeta2.info[i].classes = 3;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
                 snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
                 CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
-                CVI_TDL_CopyImage(&crop_image,&crop_img);
-                IMAGE_SAVE_ARG saver_args = {
-                  .image = &crop_img,
-                  .path = path,
-                };
-                pthread_create(&image_saver,NULL,img_write,&saver_args);
+                if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
+                  printf("Dump image failed!\n");
+                }
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                file_count++;
                 CVI_TDL_FreeImage(&crop_image);
               }
+              else{
+                snprintf(stTrackObjMeta2.info[i].name,127,"SAFE");
+                s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
+                stTrackObjMeta2.info[i].classes = 1;
+              }           
             }
           }
         } 
+      }
+      if(update == true){
+        update = false;
+        pthread_mutex_lock(&ResultMutex);
+        g_Personcount = s_Personcount;
+        CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data3);
+        pthread_mutex_unlock(&ResultMutex);
+        sem_getvalue(&NetSemphore,&sem);
+        if(sem == 0){
+          sem_post(&NetSemphore);
+        }  
       }
       for (uint32_t i = 0; i < 256; i++){
         if(s_PersonState[i] != 0x00){
@@ -486,6 +471,7 @@ void *run_tdl_thread(void *pHandle) {
         }
       }
     }
+
     /*
     bit 0 ID是否有效
     bit 1 ID是否拍照
@@ -512,9 +498,10 @@ void *run_tdl_thread(void *pHandle) {
     CVI_TDL_CopyObjectMeta(&stObjMeta, &g_obj_data);
     CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data2);
     CVI_TDL_CopyTrackerMeta(&stTrackerMeta, &g_stTrackerMeta);
+    g_Personcount = s_Personcount;
     pthread_mutex_unlock(&ResultMutex);
     memcpy(g_PersonState,s_PersonState,256);
-    g_Personcount = s_Personcount;
+    
     CVI_VPSS_ReleaseChnFrame(0, 1, &fdFrame);
     CVI_TDL_Free(&stObjMeta);
     CVI_TDL_Free(&stTrackObjMeta);
@@ -549,6 +536,18 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, SampleHandleSig);
   struct ifaddrs *interfaces = nullptr;
   struct ifaddrs *addr = nullptr;
+  char *outptr;
+  char outbuf[1024];
+  if(system("mkdir image") == 0){
+    printf("已创建image目录\n");
+  }
+  else{
+    printf("image目录已存在\n");
+  }
+  FILE * filep = popen("ls ./image -l | grep \"^-\" | wc -l","r");
+  while(fgets(outbuf,1024,filep)!=NULL);
+  file_count = strtol(outbuf,&outptr,10);
+  printf("image目录文件计数:%ld\n",file_count);
   int result = getifaddrs(&interfaces);
   if (result == 0) {
       for (addr = interfaces; addr != nullptr; addr = addr->ifa_next) {
