@@ -17,6 +17,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "cviruntime.h"
+#include <sys/types.h>
+#include <ifaddrs.h>
+
+
 #ifdef __cplusplus
 extern "C"
 {
