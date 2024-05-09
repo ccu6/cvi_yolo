@@ -46,10 +46,25 @@ void MY_RTSP_ON_DISCONNECT(const char *ip, void *arg) {
   pthread_cancel(NetThread);
 }
 
+typedef struct {
+  SAMPLE_TDL_MW_CONTEXT *pstMWContext;
+  cvitdl_service_handle_t stServiceHandle;
+} SAMPLE_TDL_VENC_THREAD_ARG_S;
 
+typedef struct{
+  cvtdl_image_t image;
+  char path[128];
+  bool flag;
+} IMAGE_SAVER_T;
+
+typedef struct{
+  IMAGE_SAVER_T queue[16];
+  uint8_t top;
+  uint8_t end;
+  sem_t sem;
+} IMAGE_SAVER_ARGS;
 
 static volatile bool bExit = false;
-
 static cvtdl_object_t g_obj_data = {0};
 static cvtdl_object_t g_obj_data2 = {0};
 static cvtdl_object_t g_obj_data3 = {0};
@@ -58,14 +73,49 @@ static uint32_t g_Personcount = 0;
 static uint8_t g_PersonTimeOut[256] = {0};
 static uint8_t g_PersonState[256] = {0};
 static uint32_t g_ip_uint32 = 0;
+static uint64_t g_idmap[256] = {0};
 char* g_ip_addr = NULL;
 const char* dump_path = "/root/image/";
 long int file_count = 0;
-typedef struct {
-  SAMPLE_TDL_MW_CONTEXT *pstMWContext;
-  cvitdl_service_handle_t stServiceHandle;
-} SAMPLE_TDL_VENC_THREAD_ARG_S;
+static IMAGE_SAVER_ARGS image_saver_arges = {
+  .top = 0,
+  .end = 0,
+};
 
+void *image_saver_thread(void *args){
+  while(!bExit)
+  {
+    sem_wait(&image_saver_arges.sem);
+    printf("start save 1 image queue top:%3d end:%3d\n",image_saver_arges.top,image_saver_arges.end);
+    if(file_count>=100){
+      printf("over 100 image, delete earlist one...");
+      system("find ./image -type f -exec ls -tr --time=atime {} \\; | tail -n1 | xargs rm -f");
+      file_count --;
+      printf("done\n");
+    }
+    if(image_saver_arges.top != image_saver_arges.end){
+      if(image_saver_arges.queue[image_saver_arges.top].flag == true){
+        printf("savine 1 image to %s\n",image_saver_arges.queue[image_saver_arges.top].path);
+        if(stbi_write_png(image_saver_arges.queue[image_saver_arges.top].path,
+                          image_saver_arges.queue[image_saver_arges.top].image.width,
+                          image_saver_arges.queue[image_saver_arges.top].image.height,
+                          STBI_rgb,
+                          image_saver_arges.queue[image_saver_arges.top].image.pix[0],
+                          image_saver_arges.queue[image_saver_arges.top].image.stride[0])){
+          printf("save image done\n");
+        }
+        else{
+         printf("Dump image failed!\n");
+        }
+        image_saver_arges.queue[image_saver_arges.top].flag = false;    
+        CVI_TDL_FreeImage(&image_saver_arges.queue[image_saver_arges.top].image);
+        image_saver_arges.top ++;
+        image_saver_arges.top %= 16;
+      }
+    }
+  }
+  return 0;
+}
 
 void *network_thread(void *ip){
   int sockfd;
@@ -187,23 +237,28 @@ void *run_venc(void *args) {
     for (uint32_t oid = 0; oid < stObjMeta2.size; oid++) {
       if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00001101) == 0b00001101) { 
         brushes[oid] = brush_red;
-        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "No Vest and Safe Hat");
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), 
+                "ID:%03ld No Vest and Safe Hat", stTrackerMeta2.info[oid].id);
       }      
       else if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00001001) == 0b00001001) {
         brushes[oid] = brush_yellow;
-        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "No Vest");
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), 
+                "ID:%03ld No Vest", stTrackerMeta2.info[oid].id);
       }    
       else if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00000101) == 0b00000101) {
         brushes[oid] = brush_pink;
-        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "No Safe Hat");
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), 
+                "ID:%03ld No Safe Hat", stTrackerMeta2.info[oid].id);
       }
       else if((s_PersonState[stTrackerMeta2.info[oid].id] & 0b00000001) == 0b00000001) {
         brushes[oid] = brush_green;
-        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "Safe");
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), 
+                "ID:%03ld Safe", stTrackerMeta2.info[oid].id);
       }
       else{
         brushes[oid] = brush_blue;
-        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), "New");
+        snprintf(stObjMeta2.info[oid].name, sizeof(stObjMeta2.info[oid].name), 
+                "ID:%03ld New", stTrackerMeta2.info[oid].id);
       }
     }
 
@@ -339,6 +394,7 @@ void *run_tdl_thread(void *pHandle) {
         if(stTrackerMeta.info[i].state == CVI_TRACKER_NEW) printf(" NEW ");
         else if(stTrackerMeta.info[i].state == CVI_TRACKER_UNSTABLE) printf(" UNSTABLE ");
         else if(stTrackerMeta.info[i].state == CVI_TRACKER_STABLE) printf(" STABLE ");
+        uid_reallc(&stTrackerMeta.info[i].id,s_PersonState);
         printf(" %ld %d\n",stTrackerMeta.info[i].id,stTrackerMeta.info[i].out_num);
       }
     }
@@ -388,51 +444,71 @@ void *run_tdl_thread(void *pHandle) {
             }
             if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000010) != 0b00000010){
               update = true;
-              if(file_count>=100)system("find ./image -type f -printf '%T+ %p\n' | sort | head -n 1 | cut -d' ' -f2 | xargs rm");
               if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001100) == 0b00001100){
                 timeval timenow;
                 gettimeofday(&timenow,NULL);
-                char path[128] = {0};
                 stTrackObjMeta2.info[i].classes = 14;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST_AND_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
-                snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
-                CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
-                if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
-                  printf("Dump image failed!\n");
-                }
+                CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
+                                  &stTrackObjMeta2.info[i].bbox,false);
+                snprintf(image_saver_arges.queue[image_saver_arges.end].path,
+                          127,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
+                image_saver_arges.queue[image_saver_arges.end].flag = true;                
+                image_saver_arges.end++;
+                image_saver_arges.end%=16;
+                printf("sended save request\n");
+                sem_post(&image_saver_arges.sem);
+                // if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
+                //   printf("Dump image failed!\n");
+                // }
+                // CVI_TDL_FreeImage(&crop_image);
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
                 file_count++;
-                CVI_TDL_FreeImage(&crop_image);
+                
               }
               else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000100) == 0b00000100){
                 timeval timenow;
-                char path[128] = {0};
                 gettimeofday(&timenow,NULL);
                 stTrackObjMeta2.info[i].classes = 12;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
-                snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
-                CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
-                if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
-                  printf("Dump image failed!\n");
-                }
+                CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
+                                  &stTrackObjMeta2.info[i].bbox,false);
+                snprintf(image_saver_arges.queue[image_saver_arges.end].path,
+                          128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");                
+                image_saver_arges.queue[image_saver_arges.end].flag = true;                
+                image_saver_arges.end++;
+                image_saver_arges.end%=16;
+                printf("sended save request\n");
+                sem_post(&image_saver_arges.sem);
+                // if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
+                //   printf("Dump image failed!\n");
+                // }
+                // CVI_TDL_FreeImage(&crop_image);
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
                 file_count++;
-                CVI_TDL_FreeImage(&crop_image);
+                
               }
               else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001000) == 0b00001000){
                 timeval timenow;
-                char path[128] = {0};
                 gettimeofday(&timenow,NULL);
                 stTrackObjMeta2.info[i].classes = 13;
                 snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
-                snprintf(path,128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
-                CVI_TDL_CropImage(&fdFrame,&crop_image,&stTrackObjMeta2.info[i].bbox,false);
-                if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
-                  printf("Dump image failed!\n");
-                }
+                CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
+                                  &stTrackObjMeta2.info[i].bbox,false);
+                snprintf(image_saver_arges.queue[image_saver_arges.end].path,
+                          128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
+                image_saver_arges.queue[image_saver_arges.end].flag = true;
+                image_saver_arges.end++;
+                image_saver_arges.end%=16;
+                printf("sended save request\n");
+                sem_post(&image_saver_arges.sem);
+                // if(stbi_write_png(path,crop_image.width,crop_image.height,STBI_rgb,crop_image.pix[0],crop_image.stride[0])){
+                //   printf("Dump image failed!\n");
+                // }
+                // CVI_TDL_FreeImage(&crop_image);
                 s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
                 file_count++;
-                CVI_TDL_FreeImage(&crop_image);
+                
               }
               else{
                 snprintf(stTrackObjMeta2.info[i].name,127,"SAFE");
@@ -564,6 +640,7 @@ int main(int argc, char *argv[]) {
   }
   pthread_mutex_init(&ResultMutex, NULL);
   sem_init(&NetSemphore, 0, 0);
+  sem_init(&image_saver_arges.sem,0,0);
   SAMPLE_TDL_MW_CONFIG_S stMWConfig;
   memset(&stMWConfig,0,sizeof(stMWConfig));
 
@@ -720,20 +797,21 @@ int main(int argc, char *argv[]) {
   else printf("DeepSORT config Success\n");
   printf("---------------------all finish-----------------------\n"); 
 
-  pthread_t stVencThread,stTDLThread;
+  pthread_t stVencThread,stTDLThread,saverThread;
 
   SAMPLE_TDL_VENC_THREAD_ARG_S args = {
       .pstMWContext = &stMWContext,
       .stServiceHandle = stServiceHandle,
   };
 
+  pthread_create(&saverThread, NULL, image_saver_thread, &args);
   pthread_create(&stVencThread, NULL, run_venc, &args);
   pthread_create(&stTDLThread, NULL, run_tdl_thread, stTDLHandle);
   sleep(1);
-
+  
   pthread_join(stVencThread, NULL);
   pthread_join(stTDLThread, NULL);
-
+  pthread_cancel(saverThread);
 
   // pthread_join(stHttpThread, NULL);
 
@@ -864,4 +942,22 @@ void My_CopyObjectInfo(cvtdl_object_info_t *src,cvtdl_object_info_t *dst)
   dst->unique_id = src->unique_id;
   dst->vehicle_properity = src->vehicle_properity;
   dst->track_state = src->track_state;
+}
+
+void uid_reallc(uint64_t *id, uint8_t *stat_map){
+  if(*id >= 255){
+    for (uint32_t i = 0;i < 256;i ++){
+      if(g_idmap[i] == *id){
+        *id = i;
+        return;
+      }
+    }
+    for (uint32_t i = 0;i < 256;i ++){
+      if(stat_map[i] == 0x00){
+        g_idmap[i] = *id;
+        *id = i;
+        return ;
+      } 
+    }
+  }
 }

@@ -41,3 +41,4 @@ void My_CopyObjectInfo(cvtdl_object_info_t *src,cvtdl_object_info_t *dst);
 bool utilis_is_in(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
 bool utilis_wear_safe_hat(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
 bool utilis_wear_safe_vest(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
+void uid_reallc(uint64_t *id, uint8_t *stat_map);
