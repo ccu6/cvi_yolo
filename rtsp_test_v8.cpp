@@ -167,6 +167,7 @@ void *run_venc(void *args) {
   SAMPLE_TDL_VENC_THREAD_ARG_S *pstArgs = (SAMPLE_TDL_VENC_THREAD_ARG_S *)args;
   VIDEO_FRAME_INFO_S stFrame;
   CVI_S32 s32Ret;
+  cvtdl_object_t stObjMeta = {0};
   cvtdl_object_t stObjMeta2 = {0};
   cvtdl_tracker_t stTrackerMeta2 = {0};
 
@@ -224,14 +225,14 @@ void *run_venc(void *args) {
     if(pthread_mutex_trylock(&ResultMutex) != EBUSY)
     {
       CVI_TDL_CopyObjectMeta(&g_obj_data2, &stObjMeta2);
+      CVI_TDL_CopyObjectMeta(&g_obj_data, &stObjMeta);
       CVI_TDL_CopyTrackerMeta(&g_stTrackerMeta, &stTrackerMeta2);
       pthread_mutex_unlock(&ResultMutex);
       memcpy(s_PersonState,g_PersonState,256);
       // s_Personcount = g_Personcount;
     }
     
-    // s32Ret = CVI_TDL_Service_ObjectDrawRect(pstArgs->stServiceHandle, &stObjMeta2, &stFrame, true,
-    //                                       brushi2);
+    
 
     cvtdl_service_brush_t *brushes = (cvtdl_service_brush_t *)malloc(stObjMeta2.size * sizeof(cvtdl_service_brush_t));
     for (uint32_t oid = 0; oid < stObjMeta2.size; oid++) {
@@ -261,13 +262,12 @@ void *run_venc(void *args) {
                 "ID:%03ld New", stTrackerMeta2.info[oid].id);
       }
     }
-
+    // s32Ret = CVI_TDL_Service_ObjectDrawRect(pstArgs->stServiceHandle, &stObjMeta, &stFrame, true, brush_red);
     s32Ret = CVI_TDL_Service_ObjectDrawRect2(pstArgs->stServiceHandle, &stObjMeta2, &stFrame, true, brushes);
     if (s32Ret != CVI_TDL_SUCCESS) {
       CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
       printf("Draw frame fail!, ret=%x\n", s32Ret);
       bExit = true;
-      free(brushes);
     }
 
     s32Ret = SAMPLE_TDL_Send_Frame_RTSP(&stFrame, pstArgs->pstMWContext);
@@ -275,14 +275,13 @@ void *run_venc(void *args) {
       CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
       printf("Send Output Frame NG, ret=%x\n", s32Ret);
       bExit = true;
-      free(brushes);
     }
     // CVI_TDL_Free(&obj_data2);
     CVI_VPSS_ReleaseChnFrame(0, 0, &stFrame);
     if (s32Ret != CVI_SUCCESS) {
       bExit = true;
-      free(brushes);
     }
+    free(brushes);
   }
   printf("Exit encoder thread\n");
   pthread_exit(NULL);
@@ -424,7 +423,7 @@ void *run_tdl_thread(void *pHandle) {
                 }
               }
               else if(stObjMeta.info[ii].classes == 2){
-                if(utilis_wear_safe_hat(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
                   break;
                 }
               }
@@ -437,7 +436,7 @@ void *run_tdl_thread(void *pHandle) {
                 }
               }
               else if(stObjMeta.info[ii].classes == 4){
-                if(utilis_wear_safe_vest(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
                   break;
                 }
               }
@@ -875,25 +874,36 @@ bool utilis_wear_safe_hat(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj)
   float mid_y = (tar.bbox.y1 + tar.bbox.y2)/2;
   float mid_obj_x = (obj.bbox.x1 + obj.bbox.x2)/2;
   float mid_obj_y = (obj.bbox.y1 + obj.bbox.y2)/2;
-  float len_x = obj.bbox.x2 - obj.bbox.x1;
-  if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2)){
-    if((mid_x >= (mid_obj_x - (len_x * 0.2)))&&(mid_x <= (mid_obj_x + (len_x * 0.2))))
+  float len_y = obj.bbox.y2 - obj.bbox.y1;
+  // if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2)){
+    if((mid_y <= (obj.bbox.y1 + (len_y * 0.4)))&&(mid_y >= (obj.bbox.y1 - (len_y * 0.4))) && (mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2))
       return true;
     else
       return false;
-  }
-  else
-    return false;
+  // }
+  // else
+  //   return false;
 }
 bool utilis_wear_safe_vest(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj)
 {
   float mid_x = (tar.bbox.x1 + tar.bbox.x2)/2;
   float mid_y = (tar.bbox.y1 + tar.bbox.y2)/2;
   if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2)){
-    if((tar.bbox.y2 >= obj.bbox.y2*0.8)&&(tar.bbox.y2 <= obj.bbox.y2*1.2))
+    // if((tar.bbox.y2 >= obj.bbox.y2*0.8)&&(tar.bbox.y2 <= obj.bbox.y2*1.2))
       return true;
-    else
-      return false;
+    // else
+    //   return false;
+  }
+  else
+    return false;
+}
+
+bool utilis_is_in(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj)
+{
+  float mid_x = (tar.bbox.x1 + tar.bbox.x2)/2;
+  float mid_y = (tar.bbox.y1 + tar.bbox.y2)/2;
+  if((mid_x >= obj.bbox.x1) && (mid_x <= obj.bbox.x2) && (mid_y >= obj.bbox.y1) && (mid_y <= obj.bbox.y2)){
+      return true;
   }
   else
     return false;
