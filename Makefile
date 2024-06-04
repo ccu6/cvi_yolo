@@ -239,6 +239,7 @@ CFLAGS += -I$(SDK_INC_PATH) \
 		  -I$(SDK_ROOT_PATH)/sample/cvi_yolo \
 		  -I$(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON \
 		  -I$(TPU_PATH)/include \
+		  -I$(PWD)
 		  
 ifeq ($(CONFIRM_ENV_VAR), 1)
 $(info ---------------------------------------)
@@ -269,13 +270,15 @@ TARGETS_IMAGE_SAMPLE += $(shell find . -type f -name 'sample_read_*.cpp' -exec b
 TARGETS_APP_SAMPLE := $(shell find . -type f -name 'sample_app_*.c' -exec basename {} .c ';')
 TARGETS_YOLO_SAMPLE := $(shell find . -type f -name 'sample_yolo*.cpp' -exec basename {} .cpp ';')
 
-TARGETS_MY_CODE_V8 := $(shell find . -type f -name 'rtsp_test_v8.cpp' -exec basename {} .cpp ';')
+TARGETS_MY_CODE_V8 := $(shell find . -type f -name 'MilkV_WebCam_Main.cpp' -exec basename {} .cpp ';')
 TARGETS_MY_CODE := $(shell find . -type f -name 'rtsp_test.cpp' -exec basename {} .cpp ';')
+TARGETS_MILKV_WEBCAM := $(shell find . -type f -name 'MilkV_WebCam_*.cpp' -exec basename {} .cpp ';')
 
 TARGETS_CVI_YOLO := $(shell find . -type f -name 'cvi_yolo.cpp' -exec basename {} .cpp ';')
  
 #TARGETS = $(TARGETS_MY_CODE) $(TARGETS_MY_CODE_V8) $(TARGETS_YOLO_SAMPLE)
 TARGETS = $(TARGETS_MY_CODE_V8)
+# TARGETS = $(TARGETS_MILKV_WEBCAM)
 # $(TARGETS_SAMPLE_INIT) \
 #   	      $(TARGETS_VI_SAMPLE) \
 #  	      $(TARGETS_AUDIO_SAMPLE) \
@@ -326,7 +329,8 @@ rtsp_test: $(PWD)/rtsp_test.o \
 			 $(SAMPLE_COMMON_FILE)
 	$(CXX) $(CFLAGS) $(SAMPLE_APP_LIBS) -o $@ $^
 
-rtsp_test_v8: $(PWD)/rtsp_test_v8.o \
+MilkV_WebCam_Main: $(PWD)/MilkV_WebCam_Main.o \
+			 $(PWD)/MilkV_WebCam_Utils.o \
 			 $(SDK_ROOT_PATH)/sample/utils/vi_vo_utils.o \
 			 $(SDK_ROOT_PATH)/sample/utils/sample_utils.o \
 			 $(SDK_ROOT_PATH)/sample/cvi_yolo/midware_utils.o \

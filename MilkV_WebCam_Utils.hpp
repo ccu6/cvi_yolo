@@ -1,3 +1,5 @@
+#ifndef MILKV_WEBCAM_UTILS
+#define MILKV_WEBCAM_UTILS
 #include "midware_utils.h"
 #include "sample_utils.h"
 #include "vi_vo_utils.h"
@@ -21,17 +23,23 @@
 #include <ifaddrs.h>
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-    void MY_RTSP_ON_CONNECT(const char *ip, void *arg);
-    void MY_RTSP_ON_DISCONNECT(const char *ip, void *arg);
-#ifdef __cplusplus
-}
-#endif
+#include <iostream>
+#include <cstring>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <arpa/inet.h>
 
+#include <termios.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
+#include <semaphore.h>
+#include <ctime>
+#include <cJSON/cJSON.h>
+#include <sstream>
+
+#include "stb_image.h"
+#include "stb_image_write.h"
 void *network_thread(void *ip);
 CVI_S32 init_param(const cvitdl_handle_t tdl_handle);
 void set_sample_mot_config(cvtdl_deepsort_config_t *ds_conf);
@@ -41,4 +49,8 @@ void My_CopyObjectInfo(cvtdl_object_info_t *src,cvtdl_object_info_t *dst);
 bool utilis_is_in(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
 bool utilis_wear_safe_hat(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
 bool utilis_wear_safe_vest(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
-void uid_reallc(uint64_t *id, uint8_t *stat_map);
+void uid_reallc(uint64_t *id, uint8_t *stat_map, uint64_t *stat_idmap);
+int open_serial_port(const char *dev);
+int8_t Network_SendResult(char * ip, uint16_t port,cvtdl_object_t obj_data, uint32_t pc);
+ssize_t write_to_serial(int fd, const std::string &data);
+#endif

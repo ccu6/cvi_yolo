@@ -1,7 +1,7 @@
 #define LOG_TAG "MiddlewareUtils"
 #define LOG_LEVEL LOG_LEVEL_INFO
 
-#include "rtsp_test.h"
+#include "rtsp_test.hpp"
 #include "middleware_utils.h"
 
 extern void MY_RTSP_ON_CONNECT(const char *ip, void *arg);
