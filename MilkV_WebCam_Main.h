@@ -61,6 +61,12 @@ typedef struct {
 
 typedef struct{
   cvtdl_image_t image;
+  int x1;
+  int x2;
+  int y1;
+  int y2;
+  int cls;
+  char name[128];
   char path[128];
   bool flag;
 } IMAGE_SAVER_T;

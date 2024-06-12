@@ -226,14 +226,13 @@ void uid_reallc(uint64_t *id, uint8_t *stat_map, uint64_t *stat_idmap){
     }
   }
 }
-int8_t Network_SendResult(char * ip, uint16_t port,cvtdl_object_t obj_data, uint32_t pc){
+int8_t Network_SendResult(char * ip, uint16_t port, int x1, int x2, int y1, int y2, int cls, char *name, uint32_t pc){
     if(ip[0] == 0) {   
         printf("ip not set\n");
         return -1;
     }
     int sockfd;
     struct sockaddr_in servaddr;
-    char UDPPacket[1024] = {0};
     char *ptr;
     uint32_t i;
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -242,23 +241,21 @@ int8_t Network_SendResult(char * ip, uint16_t port,cvtdl_object_t obj_data, uint
     servaddr.sin_port = htons(port); 
     servaddr.sin_addr.s_addr = inet_addr(ip); 
     cJSON* DetJson = cJSON_CreateObject();
-    for(i = 0 ; i < obj_data.size; i++)
-    {
-        if(obj_data.info[i].classes > 11){
-        cJSON_AddItemToObject(DetJson,"Person_count",cJSON_CreateNumber(pc));
-        cJSON_AddItemToObject(DetJson,"Calsses",cJSON_CreateNumber(obj_data.info[i].classes - 10));
-        snprintf(UDPPacket,1023,"%s.png",obj_data.info[i].name);
-        cJSON_AddItemToObject(DetJson,"Image",cJSON_CreateString(UDPPacket));
-        cJSON_AddItemToObject(DetJson,"x1",cJSON_CreateNumber(obj_data.info[i].bbox.x1));
-        cJSON_AddItemToObject(DetJson,"y1",cJSON_CreateNumber(obj_data.info[i].bbox.y1));
-        cJSON_AddItemToObject(DetJson,"x2",cJSON_CreateNumber(obj_data.info[i].bbox.x2));
-        cJSON_AddItemToObject(DetJson,"y2",cJSON_CreateNumber(obj_data.info[i].bbox.y2));
-        ptr = cJSON_Print(DetJson);
-        int ret = sendto(sockfd, ptr, strlen(ptr), 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
-        free(ptr);
-        }
-        // printf("%s.png",obj_data.info[i].name);
+    printf("try udp\n");
+    printf("%s",name);
+    if(cls > 11){
+    cJSON_AddItemToObject(DetJson,"Person_count",cJSON_CreateNumber(pc));
+    cJSON_AddItemToObject(DetJson,"Calsses",cJSON_CreateNumber(cls - 10));
+    cJSON_AddItemToObject(DetJson,"Image",cJSON_CreateString(name));
+    cJSON_AddItemToObject(DetJson,"x1",cJSON_CreateNumber(x1));
+    cJSON_AddItemToObject(DetJson,"y1",cJSON_CreateNumber(y1));
+    cJSON_AddItemToObject(DetJson,"x2",cJSON_CreateNumber(x2));
+    cJSON_AddItemToObject(DetJson,"y2",cJSON_CreateNumber(y2));
+    ptr = cJSON_Print(DetJson);
+    int ret = sendto(sockfd, ptr, strlen(ptr), 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
+    free(ptr);
     }
+        // printf("%s.png",obj_data.info[i].name);
     cJSON_Delete(DetJson);
   close(sockfd);
   return 0;

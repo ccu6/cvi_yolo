@@ -113,6 +113,6 @@ bool utilis_wear_safe_hat(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
 bool utilis_wear_safe_vest(cvtdl_object_info_t tar,cvtdl_tracker_info_t obj);
 void uid_reallc(uint64_t *id, uint8_t *stat_map, uint64_t *stat_idmap);
 int open_serial_port(const char *dev);
-int8_t Network_SendResult(char * ip, uint16_t port,cvtdl_object_t obj_data, uint32_t pc);
+int8_t Network_SendResult(char * ip, uint16_t port, int x1, int x2, int y1, int y2, int cls, char *name, uint32_t pc);
 ssize_t write_to_serial(int fd, const std::string &data);
 #endif

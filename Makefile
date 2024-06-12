@@ -203,7 +203,7 @@ MD_INC_PATH = $(SDK_ROOT_PATH)/include/cvi_md
 DRAW_RECT_INC_PATH = $(SDK_ROOT_PATH)/include/cvi_draw_rect
 PREPROCESS_INC_PATH = $(SDK_ROOT_PATH)/include/cvi_preprocess
 
-CFLAGS += -std=gnu11 -Wno-pointer-to-int-cast -fsigned-char -Werror=all -Wno-format-truncation -Wno-class-memaccess -Wno-unused-variable -fdiagnostics-color=always -s
+CFLAGS += -std=gnu11 -Wno-pointer-to-int-cast -fsigned-char -Werror=all -Wno-format-contains-nul -Wno-format-truncation -Wno-class-memaccess -Wno-unused-variable -fdiagnostics-color=always -s
 
 SRCS := $(wildcard $(PWD)/*.c)
 CPPS := $(wildcard $(PWD)/*.cpp)
@@ -275,16 +275,8 @@ TARGETS_MY_CODE := $(shell find . -type f -name 'rtsp_test.cpp' -exec basename {
 TARGETS_MILKV_WEBCAM := $(shell find . -type f -name 'MilkV_WebCam_*.cpp' -exec basename {} .cpp ';')
 
 TARGETS_CVI_YOLO := $(shell find . -type f -name 'cvi_yolo.cpp' -exec basename {} .cpp ';')
- 
-#TARGETS = $(TARGETS_MY_CODE) $(TARGETS_MY_CODE_V8) $(TARGETS_YOLO_SAMPLE)
+
 TARGETS = $(TARGETS_MY_CODE_V8)
-# TARGETS = $(TARGETS_MILKV_WEBCAM)
-# $(TARGETS_SAMPLE_INIT) \
-#   	      $(TARGETS_VI_SAMPLE) \
-#  	      $(TARGETS_AUDIO_SAMPLE) \
-# 	      $(TARGETS_READ_SAMPLE) \
-# 	      $(TARGETS_APP_SAMPLE) \
-	      $(TARGETS_YOLO_SAMPLE)
 
 .PHONY : all clean
 
@@ -320,22 +312,13 @@ sample_vi_%: $(PWD)/sample_vi_%.o \
 			 $(SAMPLE_COMMON_FILE)
 	$(CC) $(CFLAGS) $(SAMPLE_APP_LIBS) -o $@ $^
 
-rtsp_test: $(PWD)/rtsp_test.o \
-			 $(SDK_ROOT_PATH)/sample/utils/vi_vo_utils.o \
-			 $(SDK_ROOT_PATH)/sample/utils/sample_utils.o \
-			 $(SDK_ROOT_PATH)/sample/cvi_yolo/midware_utils.o \
-			 $(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON/cJSON.o \
-			 $(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON/cJSON_Utils.o 
-			 $(SAMPLE_COMMON_FILE)
-	$(CXX) $(CFLAGS) $(SAMPLE_APP_LIBS) -o $@ $^
-
 MilkV_WebCam_Main: $(PWD)/MilkV_WebCam_Main.o \
 			 $(PWD)/MilkV_WebCam_Utils.o \
+			 $(PWD)/midware_utils.o \
+			 $(PWD)/cJSON/cJSON.o \
+			 $(PWD)/cJSON/cJSON_Utils.o \
 			 $(SDK_ROOT_PATH)/sample/utils/vi_vo_utils.o \
 			 $(SDK_ROOT_PATH)/sample/utils/sample_utils.o \
-			 $(SDK_ROOT_PATH)/sample/cvi_yolo/midware_utils.o \
-			 $(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON/cJSON.o \
-			 $(SDK_ROOT_PATH)/sample/cvi_yolo/cJSON/cJSON_Utils.o 
 			 $(SAMPLE_COMMON_FILE)
 	$(CXX) $(CFLAGS) $(SAMPLE_APP_LIBS) -o $@ $^
 
