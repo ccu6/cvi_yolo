@@ -1,5 +1,71 @@
 #include "MilkV_WebCam_Utils.hpp"
 
+
+class Obj_Status
+{
+  public:
+  uint8_t get_status(uint8_t status);
+  uint8_t get_violation(void);  
+  
+  void set_status(uint8_t status);
+  void reset_status(uint8_t status);
+  void set_status_list(uint8_t status);
+  void ticks(uint8_t vio_id);
+  void obj_clear(void);
+  void obj_init(void);
+  private:
+  uint8_t status_list[10] = {0};
+  uint8_t status_list_end = 0;  
+  uint8_t obj_ticks;
+  uint8_t obj_status;
+};
+void Obj_Status::ticks(uint8_t vio_id){
+  if(OBJ_STATUS_CHECK(obj_status,OBJ_IS_AVILABLE)){
+    if(OBJ_STATUS_CHECK(obj_status,OBJ_IS_NEW)){
+      obj_ticks --;
+      if(obj_ticks == 0){
+        OBJ_STATUS_SET(obj_status,OBJ_IS_STABLE);
+        OBJ_STATUS_RESET(obj_status,OBJ_IS_NEW);
+        OBJ_STATUS_SET(obj_status,get_violation());
+        obj_ticks = OBJ_STABLE_TICKS;
+      }
+    }
+    else if(OBJ_STATUS_CHECK(obj_status,OBJ_IS_STABLE)){
+      this->set_status_list(vio_id);
+    }
+  }
+  else{
+    if(OBJ_STATUS_CHECK(obj_status,OBJ_IS_NEW)){
+      this->obj_clear();
+    }
+    else if(OBJ_STATUS_CHECK(obj_status,OBJ_IS_STABLE)){
+      obj_ticks --;
+      if(obj_ticks == 0){
+        this->obj_clear();
+      }
+    }    
+  }
+
+}
+
+uint8_t Obj_Status::get_status(uint8_t status){
+  return (OBJ_STATUS_CHECK(obj_status,status));
+}
+void Obj_Status::set_status_list(uint8_t status){
+  status_list[status_list_end] = status; 
+}
+uint8_t Obj_Status::get_violation(void){
+  uint8_t vio_list[4] = {0};
+  uint8_t i = 0;
+  uint8_t voi_id = 0;
+  for(i = 0;i < OBJ_CHECK_TICKS;i++){
+    vio_list[status_list[i]]++;
+  }
+  for(i = 0;i < 4;i++){
+    vio_list[4]++;
+  }
+}
+
 CVI_S32 init_param(const cvitdl_handle_t tdl_handle) {
   // setup preprocess
   YoloPreParam preprocess_cfg =

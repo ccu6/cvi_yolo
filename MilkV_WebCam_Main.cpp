@@ -575,28 +575,6 @@ void *run_tdl_thread(void *pHandle) {
       }
     }
 
-    /*
-    bit 0 ID是否有效
-    bit 1 ID是否拍照
-    bit 2 ID是否佩戴头盔
-    bit 3 ID是否穿戴反光衣
-    bit 4 
-    */
-
-   /*
-  0: Hardhat
-  1: Mask
-  2: NO-Hardhat
-  3: NO-Mask
-  4: NO-Safety Vest 
-  5: Person
-  6: Safety Cone
-  7: Safety Vest
-  8: machinery 
-  9: vehicle
-*/
-
-
     pthread_mutex_lock(&ResultMutex);
     CVI_TDL_CopyObjectMeta(&stObjMeta, &g_obj_data);
     CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data2);

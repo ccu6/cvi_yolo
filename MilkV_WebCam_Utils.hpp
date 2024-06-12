@@ -40,6 +40,45 @@
 
 #include "stb_image.h"
 #include "stb_image_write.h"
+
+#define OBJ_STATUS_CHECK(a,b) (((a)&(b)) == (b))
+#define OBJ_STATUS_SET(a,b) (a|=(b))
+#define OBJ_STATUS_RESET(a,b) (a&=~(b))
+
+#define OBJ_IS_AVILABLE     0b00000001
+#define OBJ_IS_SHOTED       0b00000010
+#define OBJ_IS_WEAR_SAFEHAT 0b00000100
+#define OBJ_IS_WEAR_VEST    0b00001000
+#define OBJ_IS_NEW          0b00010000
+#define OBJ_IS_STABLE       0b00100000
+
+#define OBJ_STABLE_TICKS    100
+#define OBJ_NEW_TICKS       10
+#define OBJ_CHECK_TICKS     10
+#define OBJ_VIOLATION_TICKS 6
+
+#define VIOLATION_ID        1
+    /*
+    bit 0 ID是否有效
+    bit 1 ID是否拍照
+    bit 2 ID是否佩戴头盔
+    bit 3 ID是否穿戴反光衣
+    bit 4 
+    */
+
+   /*
+  0: Hardhat
+  1: Mask
+  2: NO-Hardhat
+  3: NO-Mask
+  4: NO-Safety Vest 
+  5: Person
+  6: Safety Cone
+  7: Safety Vest
+  8: machinery 
+  9: vehicle
+*/
+
 void *network_thread(void *ip);
 CVI_S32 init_param(const cvitdl_handle_t tdl_handle);
 void set_sample_mot_config(cvtdl_deepsort_config_t *ds_conf);
