@@ -45,10 +45,10 @@
 #define OBJ_STATUS_SET(a,b) (a|=(b))
 #define OBJ_STATUS_RESET(a,b) (a&=~(b))
 
-#define OBJ_IS_AVILABLE     0b00000001
+#define OBJ_IS_AVAILABLE    0b00000001
 #define OBJ_IS_SHOTED       0b00000010
-#define OBJ_IS_WEAR_SAFEHAT 0b00000100
-#define OBJ_IS_WEAR_VEST    0b00001000
+#define OBJ_VIO_SAFEHAT     0b00000100
+#define OBJ_VIO_VEST        0b00001000
 #define OBJ_IS_NEW          0b00010000
 #define OBJ_IS_STABLE       0b00100000
 
@@ -57,7 +57,11 @@
 #define OBJ_CHECK_TICKS     10
 #define OBJ_VIOLATION_TICKS 6
 
-#define VIOLATION_ID        1
+#define VIOLATION_NO_VEST               2
+#define VIOLATION_NO_SAFEHAT            3
+#define VIOLATION_NO_VEST_AND_SAFEHAT   4
+#define VIOLATION_SAFE                  1
+
     /*
     bit 0 ID是否有效
     bit 1 ID是否拍照
@@ -78,6 +82,25 @@
   8: machinery 
   9: vehicle
 */
+const uint8_t vio_ids[5] = {0b00000000,0b00000000,OBJ_VIO_VEST,OBJ_VIO_SAFEHAT,OBJ_VIO_VEST|OBJ_VIO_SAFEHAT};
+class Obj_Status
+{
+    public:
+    uint8_t obj_status;
+    uint8_t obj_ticks;
+    Obj_Status();
+    ~Obj_Status();
+    uint8_t get_status(uint8_t status);
+    uint8_t get_violation(void);  
+
+    void set_status_list(uint8_t status);
+    void ticks(uint8_t vio_id);
+    void obj_clear(void);
+    private:
+    uint8_t status_list[OBJ_CHECK_TICKS] = {0};
+    uint8_t status_list_end = 0;  
+   
+};
 
 void *network_thread(void *ip);
 CVI_S32 init_param(const cvitdl_handle_t tdl_handle);

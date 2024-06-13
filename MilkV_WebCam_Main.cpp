@@ -306,6 +306,8 @@ void *run_tdl_thread(void *pHandle) {
   uint32_t s_Personcount = 0;
   uint8_t s_PersonTimeOut[256] = {0};
   uint8_t s_PersonState[256] = {0};
+
+  Obj_Status* s_PersonStatus = new Obj_Status[256];
   cvtdl_image_t crop_image;
   int sem;
   bool update = false;
@@ -429,150 +431,129 @@ void *run_tdl_thread(void *pHandle) {
       for (uint32_t i = 0; i < stTrackerMeta.size; i++){
         stTrackObjMeta2.info[i].unique_id = stTrackerMeta.info[i].id;
         if (stTrackerMeta.info[i].state == CVI_TRACKER_STABLE){
-          if(s_PersonState[stTrackerMeta.info[i].id] == 0b00010000 && s_PersonTimeOut[stTrackerMeta.info[i].id] == 0x00){
-            s_PersonState[stTrackerMeta.info[i].id] = 0b00000001;
-            s_PersonTimeOut[stTrackerMeta.info[i].id] = 100;
-            s_Personcount++;
-          }
-          else if(s_PersonState[stTrackerMeta.info[i].id] == 0b00000000){
-            s_PersonState[stTrackerMeta.info[i].id] = 0b00010000;
-            s_PersonTimeOut[stTrackerMeta.info[i].id] = 10;
-            stTrackObjMeta2.info[i].classes = 0;
-          }        
-          if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000001) == 0b00000001){
-            s_PersonTimeOut[stTrackerMeta.info[i].id] = 100;
-            s_PersonState[stTrackerMeta.info[i].id] |= 0b00000100;
-            for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
-              if(stObjMeta.info[ii].classes == 0){
-                if(utilis_wear_safe_hat(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                  s_PersonState[stTrackerMeta.info->id] &= ~0b00000100;
-                }
-              }
-              else if(stObjMeta.info[ii].classes == 2){
-                if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                  break;
-                }
+          OBJ_STATUS_SET(s_PersonStatus[stTrackerMeta.info[i].id].obj_status,OBJ_IS_AVAILABLE);
+          uint8_t vio_cat =  0;
+          OBJ_STATUS_SET(vio_cat,OBJ_VIO_SAFEHAT|OBJ_VIO_VEST);
+          for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
+            if(stObjMeta.info[ii].classes == 0){
+              if(utilis_wear_safe_hat(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                OBJ_STATUS_RESET(vio_cat,OBJ_VIO_SAFEHAT);
               }
             }
-            s_PersonState[stTrackerMeta.info[i].id] |= 0b00001000;
-            for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
-              if(stObjMeta.info[ii].classes == 7){
-                if(utilis_wear_safe_vest(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                  s_PersonState[stTrackerMeta.info[i].id] &= ~0b00001000;
-                }
+            else if(stObjMeta.info[ii].classes == 2){
+              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                OBJ_STATUS_SET(vio_cat,OBJ_VIO_SAFEHAT);
+                break;
               }
-              else if(stObjMeta.info[ii].classes == 4){
-                if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
-                  break;
-                }
-              }
-            }
-            if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000010) != 0b00000010){
-              update = true;
-              if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001100) == 0b00001100){
-                timeval timenow;
-                gettimeofday(&timenow,NULL);
-                stTrackObjMeta2.info[i].classes = 14;
-                snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST_AND_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
-                CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
-                                  &stTrackObjMeta2.info[i].bbox,false);
-                snprintf(image_saver_arges.queue[image_saver_arges.end].path,
-                          127,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
-                image_saver_arges.queue[image_saver_arges.end].flag = true;                
-                image_saver_arges.end++;
-                image_saver_arges.end%=16;
-                #ifdef DEBUG
-                printf("sended save request\n");
-                #endif
-                #ifdef ALSA
-                pthread_t ALSAThread;
-                pthread_create(&ALSAThread, NULL, system_ALSA_thread, (void *)"3.wav");
-                pthread_detach(ALSAThread);
-                #endif
-                sem_post(&image_saver_arges.sem);
-                s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
-                file_count++;
-                
-              }
-              else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00000100) == 0b00000100){
-                timeval timenow;
-                gettimeofday(&timenow,NULL);
-                stTrackObjMeta2.info[i].classes = 12;
-                snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
-                CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
-                                  &stTrackObjMeta2.info[i].bbox,false);
-                snprintf(image_saver_arges.queue[image_saver_arges.end].path,
-                          128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");                
-                image_saver_arges.queue[image_saver_arges.end].flag = true;                
-                image_saver_arges.end++;
-                image_saver_arges.end%=16;
-                #ifdef DEBUG
-                printf("sended save request\n");
-                #endif
-                sem_post(&image_saver_arges.sem);
-                s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
-                file_count++;
-                
-              }
-              else if((s_PersonState[stTrackerMeta.info[i].id] & 0b00001000) == 0b00001000){
-                timeval timenow;
-                gettimeofday(&timenow,NULL);
-                stTrackObjMeta2.info[i].classes = 13;
-                snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
-                CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
-                                  &stTrackObjMeta2.info[i].bbox,false);
-                snprintf(image_saver_arges.queue[image_saver_arges.end].path,
-                          128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
-                image_saver_arges.queue[image_saver_arges.end].flag = true;
-                image_saver_arges.end++;
-                image_saver_arges.end%=16;
-                #ifdef DEBUG
-                printf("sended save request\n");
-                #endif
-                sem_post(&image_saver_arges.sem);
-                s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
-                file_count++;
-                
-              }
-              else{
-                snprintf(stTrackObjMeta2.info[i].name,127,"SAFE");
-                s_PersonState[stTrackerMeta.info[i].id] |= 0b00000010;
-                stTrackObjMeta2.info[i].classes = 11;
-              }           
             }
           }
-        } 
+          for(uint32_t ii = 0; ii < stObjMeta.size; ii++){
+            if(stObjMeta.info[ii].classes == 7){
+              if(utilis_wear_safe_vest(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                OBJ_STATUS_RESET(vio_cat,OBJ_VIO_VEST);
+              }
+            }
+            else if(stObjMeta.info[ii].classes == 4){
+              if(utilis_is_in(stObjMeta.info[ii],stTrackerMeta.info[i]) == true){
+                OBJ_STATUS_SET(vio_cat,OBJ_VIO_VEST);
+                break;
+              }
+            }
+          }
+          s_PersonStatus[stTrackerMeta.info[i].id].ticks(vio_cat);
+        }
+        for(uint32_t ii = 0; ii < 256; ii++){
+          if(!OBJ_STATUS_CHECK(s_PersonStatus[ii].obj_status,OBJ_IS_AVAILABLE)){
+            s_PersonStatus[ii].ticks(0);
+          }
+          else if(!OBJ_STATUS_CHECK(s_PersonStatus[ii].obj_status,OBJ_IS_SHOTED)){
+            update = true;
+            printf("shot 1 obj\n");
+            if(s_PersonStatus[ii].get_violation() == VIOLATION_NO_VEST_AND_SAFEHAT){
+              timeval timenow;
+              gettimeofday(&timenow,NULL);
+              stTrackObjMeta2.info[i].classes = 14;
+              snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST_AND_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
+              CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
+                                &stTrackObjMeta2.info[i].bbox,false);
+              snprintf(image_saver_arges.queue[image_saver_arges.end].path,
+                        127,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
+                        image_saver_arges.queue[image_saver_arges.end].flag = true;                
+                        image_saver_arges.end++;
+                        image_saver_arges.end%=16;
+              #ifdef ALSA
+              pthread_t ALSAThread;
+              pthread_create(&ALSAThread, NULL, system_ALSA_thread, (void *)"3.wav");
+              pthread_detach(ALSAThread);
+              #endif
+              sem_post(&image_saver_arges.sem);
+              OBJ_STATUS_SET(s_PersonStatus[ii].obj_status,OBJ_IS_SHOTED);
+              file_count++;
+            }
+            else if(s_PersonStatus[ii].get_violation() == VIOLATION_NO_SAFEHAT){
+              timeval timenow;
+              gettimeofday(&timenow,NULL);
+              stTrackObjMeta2.info[i].classes = 12;
+              snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_SAFE_HAT",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
+              CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
+                                &stTrackObjMeta2.info[i].bbox,false);
+              snprintf(image_saver_arges.queue[image_saver_arges.end].path,
+                        128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");                
+              image_saver_arges.queue[image_saver_arges.end].flag = true;                
+              image_saver_arges.end++;
+              image_saver_arges.end%=16;
+              #ifdef DEBUG
+              printf("sended save request\n");
+              #endif
+              sem_post(&image_saver_arges.sem);
+              OBJ_STATUS_SET(s_PersonStatus[ii].obj_status,OBJ_IS_SHOTED);
+              file_count++;
+            }
+            else if(s_PersonStatus[ii].get_violation() == VIOLATION_NO_VEST){
+              timeval timenow;
+              gettimeofday(&timenow,NULL);
+              stTrackObjMeta2.info[i].classes = 13;
+              snprintf(stTrackObjMeta2.info[i].name,127,"%010ld_ID%03d_NO_VEST",timenow.tv_sec,(int)stTrackerMeta.info[i].id);
+              CVI_TDL_CropImage(&fdFrame,&image_saver_arges.queue[image_saver_arges.end].image,
+                                &stTrackObjMeta2.info[i].bbox,false);
+              snprintf(image_saver_arges.queue[image_saver_arges.end].path,
+                        128,"%s%s%s",dump_path,stTrackObjMeta2.info[i].name,".png");
+              image_saver_arges.queue[image_saver_arges.end].flag = true;
+              image_saver_arges.end++;
+              image_saver_arges.end%=16;
+              #ifdef DEBUG
+              printf("sended save request\n");
+              #endif
+              sem_post(&image_saver_arges.sem);
+              OBJ_STATUS_SET(s_PersonStatus[ii].obj_status,OBJ_IS_SHOTED);
+              file_count++;              
+            }
+            else{
+              snprintf(stTrackObjMeta2.info[i].name,127,"SAFE");
+              OBJ_STATUS_SET(s_PersonStatus[ii].obj_status,OBJ_IS_SHOTED);
+              stTrackObjMeta2.info[i].classes = 11;
+            }
+          }
+        }
       }
       if(update == true){
         update = false;
         pthread_mutex_lock(&ResultMutex);
         g_Personcount = s_Personcount;
-        CVI_TDL_CopyObjectMeta(&stTrackObjMeta2, &g_obj_data3);
         pthread_mutex_unlock(&ResultMutex);
         Network_SendResult(g_tar_ip_addr, 11451, stTrackObjMeta2, s_Personcount);
-        // sem_getvalue(&NetSemphore,&sem);
-        // if(sem == 0){
-        //   sem_post(&NetSemphore);
-        // }  
       }
+      printf("---------------------------------------------------\n");
       for (uint32_t i = 0; i < 256; i++){
-        if(s_PersonState[i] != 0x00){
-          #ifdef DEBUG
-          printf("ID:%3d Remain %3dTicks ",i,s_PersonTimeOut[i]);
-          if(s_PersonState[i] & 0b00000100) printf("No Safe Hat  ");
-          if(s_PersonState[i] & 0b00001000) printf("No Vest  ");
-          if(s_PersonState[i] & 0b00010000) printf("New");
-          else if(!(s_PersonState[i] & 0b00001100)) printf("SAFE");
-          printf("\n");
-          #endif
+        if(OBJ_STATUS_CHECK(s_PersonStatus[i].obj_status,OBJ_IS_AVAILABLE)){
+          printf("ID:%3d Remain %3dTicks Vio:%3d",i,
+                  s_PersonStatus[i].obj_ticks,s_PersonStatus[i].get_violation());  
+                  printf("\n");   
         }
-        if(s_PersonTimeOut[i] == 0x00){
-          s_PersonState[i] = 0x00;
-        }
-        else{
-          s_PersonTimeOut[i]--;
-        }
+        OBJ_STATUS_RESET(s_PersonStatus[i].obj_status,OBJ_IS_AVAILABLE);
+        
       }
+      printf("---------------------------------------------------\n");
     }
 
     pthread_mutex_lock(&ResultMutex);
@@ -592,7 +573,6 @@ void *run_tdl_thread(void *pHandle) {
     printf("------------------ END -------------------\n\n\n");
     #endif
   }
-
   printf("Exit TDL thread\n");
   pthread_exit(NULL);
 }
