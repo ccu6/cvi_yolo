@@ -21,7 +21,7 @@
 #include "cviruntime.h"
 #include <sys/types.h>
 #include <ifaddrs.h>
-
+#include <atomic>
 
 #include <iostream>
 #include <cstring>
@@ -86,8 +86,8 @@ const uint8_t vio_ids[5] = {0b00000000,0b00000000,OBJ_VIO_VEST,OBJ_VIO_SAFEHAT,O
 class Obj_Status
 {
     public:
-    uint8_t obj_status;
-    uint8_t obj_ticks;
+    std::atomic<uint8_t> obj_status;
+    std::atomic<uint8_t> obj_ticks;
     Obj_Status();
     ~Obj_Status();
     uint8_t get_status(uint8_t status);
@@ -96,8 +96,9 @@ class Obj_Status
     void set_status_list(uint8_t status);
     void ticks(uint8_t vio_id);
     void obj_clear(void);
-    private:
     uint8_t status_list[OBJ_CHECK_TICKS] = {0};
+    private:
+    
     uint8_t status_list_end = 0;  
    
 };
